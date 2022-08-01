@@ -246,10 +246,12 @@ def download_granule_nsidc(granule_id, shapefile, granule_output_path, uid, pwd)
             
     return
 
+
 class edc:
     u = 'arndtp'
     p = 'My5ecretPw0rd!'
 
+    
 def read_atl03(filename, geoid_h=True):
     """
     Read in an ATL03 granule. 
@@ -282,6 +284,7 @@ def read_atl03(filename, geoid_h=True):
                  bckgrd_int_height : float32, height of the background window, meters
                  delta_time : float64, Time at the start of ATLAS 50-shot sum, seconds from the ATLAS SDP GPS Epoch
     ancillary : dictionary with the following keys:
+                granule_id : string, the producer granule id, extracted from filename
                 atlas_sdp_gps_epoch : float64, reference GPS time for ATLAS in seconds [1198800018.0]
                 rgt : int16, the reference ground track number
                 cycle_number : int8, the ICESat-2 cycle number of the granule
@@ -293,7 +296,7 @@ def read_atl03(filename, geoid_h=True):
                                     
     Examples
     --------
-    >>> read_atl03(filename=processed_ATL03_20210715182907_03381203_005_01.h5, geoid_h=True)
+    >>> read_atl03(filename='processed_ATL03_20210715182907_03381203_005_01.h5', geoid_h=True)
     """
     
     import h5py
@@ -301,6 +304,7 @@ def read_atl03(filename, geoid_h=True):
     import numpy as np
     
     print('  reading in', filename)
+    granule_id = filename[filename.find('ATL03_'):(filename.find('.h5')+3)]
     
     # open file
     f = h5py.File(filename, 'r')
@@ -339,7 +343,8 @@ def read_atl03(filename, geoid_h=True):
         gtx_strength_dict = {k:'undefined' for k in gtl}
         
 
-    ancillary = {'atlas_sdp_gps_epoch': f['ancillary_data']['atlas_sdp_gps_epoch'][0],
+    ancillary = {'granule_id': granule_id,
+                 'atlas_sdp_gps_epoch': f['ancillary_data']['atlas_sdp_gps_epoch'][0],
                  'rgt': f['orbit_info']['rgt'][0],
                  'cycle_number': f['orbit_info']['cycle_number'][0],
                  'sc_orient': orient_str,
@@ -349,6 +354,7 @@ def read_atl03(filename, geoid_h=True):
     # loop through all beams
     print('  reading in beam:', end=' ')
     for beam in beamlist:
+        print(beam, end=' ')
         try:
             #### get photon-level data
             df = pd.DataFrame({'lat': np.array(f[beam]['heights']['lat_ph']),
@@ -388,15 +394,84 @@ def read_atl03(filename, geoid_h=True):
             if geoid_h:
                 #### interpolate geoid to photon level using along-track distance, and add to elevation
                 geophys_geoid = np.array(f[beam]['geophys_corr']['geoid'])
-                geoid = np.interp(np.array(df.xatc), segment_dist_x+0.5*segment_length, geophys_geoid)
-                df['h'] = df.h - geoid
-                df['geoid'] = geoid
+                geophys_geoid_x = segment_dist_x+0.5*segment_length
+                valid_geoid = geophys_geoid<1e10 # filter out INVALID_R4B fill values
+                geophys_geoid = geophys_geoid[valid_geoid]
+                geophys_geoid_x = geophys_geoid_x[valid_geoid]
+                # hacky fix for no weird stuff happening if geoid is undefined everywhere
+                if len(geophys_geoid>5):
+                    geoid = np.interp(np.array(df.xatc), geophys_geoid_x, geophys_geoid)
+                    df['h'] = df.h - geoid
+                    df['geoid'] = geoid
+                else:
+                    df['geoid'] = 0.0
 
             #### save to list of dataframes
             dfs[beam] = df
             dfs_bckgrd[beam] = df_bckgrd
-            print(beam, end=' ')
+        
         except Exception as e:
             print('Error for {f:s} on {b:s} ... skipping:'.format(f=filename, b=beam), e)
     print(' --> done.')
     return dfs, dfs_bckgrd, ancillary
+
+
+def print_granule_stats(photon_data, bckgrd_data, ancillary, outfile=None):
+    """
+    Print stats from a read-in granule.
+    Mostly for checking that things are working / OSG testing. 
+
+    Parameters
+    ----------
+    photon_data : dict of pandas dataframes
+        the first output of read_atl03()
+    bckgrd_data : dict of pandas dataframes
+        the second output of read_atl03()
+    ancillary : dict
+        the third output of read_atl03()
+    outfile : string
+        file path and name for the output
+        if outfile=None, results are printed to stdout
+
+    Returns
+    -------
+    nothing
+                                    
+    Examples
+    --------
+    >>> print_granule_stats(photon_data, bckgrd_data, ancillary, outfile='stats.txt')
+    """    
+    
+    import pandas as pd
+    import numpy as np
+
+    if outfile is not None: 
+        import sys
+        original_stdout = sys.stdout
+        f = open(outfile, "w")
+        sys.stdout = f
+
+    print('\n*********************************')
+    print('** GRANULE INFO AND STATISTICS **')
+    print('*********************************\n')
+    print(ancillary['granule_id'])
+    print('RGT:', ancillary['rgt'])
+    print('cycle number:', ancillary['cycle_number'])
+    print('spacecraft orientation:', ancillary['sc_orient'])
+    print('beam configuation:')
+    for k in ancillary['gtx_beam_dict'].keys():
+        print(' ', k, ': beam', ancillary['gtx_beam_dict'][k], '(%s)'%ancillary['gtx_strength_dict'][k])
+    for k in photon_data.keys():
+        counts = photon_data[k].count()
+        nanvals = photon_data[k].isna().sum()
+        maxs = photon_data[k].max()
+        mins = photon_data[k].min()
+        print('\nPHOTON DATA SUMMARY FOR BEAM %s'%k.upper())
+        print(pd.DataFrame({'count':counts, 'nans':nanvals, 'min':mins, 'max':maxs}))
+        
+    if outfile is not None:
+        f.close()
+        sys.stdout = original_stdout
+        with open(outfile, 'r') as f:
+            print(f.read())
+        
