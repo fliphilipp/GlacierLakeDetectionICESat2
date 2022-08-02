@@ -3,7 +3,7 @@
 # Author: Philipp S. Arndt, Scripps Polar Center, UCSD                                  #
 #########################################################################################
 
-def download_granule_nsidc(granule_id, shapefile, granule_output_path, uid, pwd): 
+def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid, pwd): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,
     subsets it to a given shapefile, and puts it into the specified
@@ -14,6 +14,11 @@ def download_granule_nsidc(granule_id, shapefile, granule_output_path, uid, pwd)
     ----------
     granule_id : string
         the producer_granule_id for CMR search
+    gtxs : string or list
+        the ground tracks to request
+        possible values:
+            'gt1l' or 'gt1r' or 'gt2l', ... (single gtx)
+            ['gt1l', 'gt3r', ...] (list of gtxs)
     shapefile : string
         filepath to the shapefile used for spatial subsetting
     granule_output_path : string
@@ -31,6 +36,7 @@ def download_granule_nsidc(granule_id, shapefile, granule_output_path, uid, pwd)
     --------
     >>> download_granule_nsidc(granule_id='ATL03_20210715182907_03381203_005_01.h5', 
                                shapefile='/shapefiles/jakobshavn.shp', 
+                               gtxs='gt1l'
                                granule_output_path='/IS2data', 
                                uid='myuserid', 
                                pwd='mypasword')
@@ -87,7 +93,13 @@ def download_granule_nsidc(granule_id, shapefile, granule_output_path, uid, pwd)
                 '/gtx/heights/pce_mframe_cnt',
                 '/gtx/heights/quality_ph']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
-    var_list = sum([[v.replace('/gtx','/'+bm) for bm in beam_list] if '/gtx' in v else [v] for v in vars_sub],[])
+    
+    if type(gtxs) == str:
+        var_list = [v.replace('/gtx','/'+gtxs.lower()) if '/gtx' in v else v for v in vars_sub]
+    elif type(gtxs) == list:
+        var_list = sum([[v.replace('/gtx','/'+bm.lower()) for bm in gtxs] if '/gtx' in v else [v] for v in vars_sub],[])
+    else: # default to requesting all beams
+        var_list = sum([[v.replace('/gtx','/'+bm) for bm in beam_list] if '/gtx' in v else [v] for v in vars_sub],[])
     
     # search for the given granule
     search_params = {
