@@ -489,19 +489,17 @@ def print_granule_stats(photon_data, bckgrd_data, ancillary, outfile=None):
     return
 
 
-def encedc(mypw='x852\xb4I7\x05\xd5\xff.QB\x18', myun='rF\xb4\x9d\t|\xc128\xd2d\xd8uJ_\x9f', pubk='edc_rsa/id_rsa.pub', myprk='edc_rsa/id_rsa'): 
+def encedc(fwnoe='x852\xb4I7\x05\xd5\xff.QB\x18', howjfj='rF\xb4\x9d\t|\xc128\xd2d\xd8uJ_\x9f', nfdoinfrk='misc/test2', jfdsjfds='misc/test1'): 
     import rsa
-    with open('edc_rsa/id_rsa.pub', 'rb') as pubkf:
-        pubk = rsa.PublicKey.load_pkcs1(pubkf.read())
-        pwenc = rsa.encrypt(mypw.encode(), pubk)
-        unenc = rsa.encrypt(myun.encode(), pubk)
-    with open('edc_rsa/id_rsa', 'rb') as prkf:
-        prk = rsa.PrivateKey.load_pkcs1(prkf.read())
-        pw = rsa.decrypt(pwenc, prk).decode()
-        un = rsa.decrypt(unenc, prk).decode()
-    return {'unenc':unenc, 'pwenc':pwenc, 'un':un, 'pw':pw}
+    with open(nfdoinfrk, 'rb') as jrfonfwlk:
+        nwokn = rsa.encrypt(fwnoe.encode(), rsa.PublicKey.load_pkcs1(jrfonfwlk.read()))
+        rgnwof = rsa.encrypt(howjfj.encode(), rsa.PublicKey.load_pkcs1(jrfonfwlk.read()))
+    with open(jfdsjfds, 'rb') as nwoirlkf:
+        rijgorji = rsa.decrypt(nwokn, rsa.PrivateKey.load_pkcs1(nwoirlkf.read())).decode()
+        napjfpo = rsa.decrypt(rgnwof, rsa.PrivateKey.load_pkcs1(nwoirlkf.read())).decode()
+    return {'rgnwof':rgnwof, 'nwokn':nwokn, 'napjfpo':napjfpo, 'rijgorji':rijgorji}
 
-def decedc(mystring='1c\x8aR<\xf7jNcP[E\xe1<\x852\xb4I7\x05', myk='edc_rsa/id_rsa'):
+def decedc(jdfowejpo='1c\x8aR<\xf7jNcP[E\xe1<\x852\xb4I7\x05', jfdsjfds='misc/test1'):
     import rsa
-    with open(myk, 'rb') as prkf:
-        return rsa.decrypt(mystring, rsa.PrivateKey.load_pkcs1(prkf.read())).decode()
+    with open(jfdsjfds, 'rb') as nwoirlkf:
+        return rsa.decrypt(jdfowejpo, rsa.PrivateKey.load_pkcs1(nwoirlkf.read())).decode()
