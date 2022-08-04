@@ -2,15 +2,15 @@ from utils import *
 from os import listdir, makedirs
 from os.path import isfile, join, exists
 import os
+import rsa
 
 granule = 'ATL03_20210715182907_03381203_005_01.h5'
-gtxs = 'gt1l'
 shapefile = '/shapefiles/jakobshavn_small.shp'
+gtxs = 'gt1l'
 
 datadir = '/IS2data'
 
-c = edc()
-download_granule_nsidc(granule, gtxs, shapefile, datadir, c.u, c.p)
+download_granule_nsidc(granule, gtxs, shapefile, datadir, decedc(edc().u), decedc(edc().p))
 
 filelist = [datadir[1:]+'/'+f for f in listdir(datadir[1:]) if isfile(join(datadir[1:], f)) & ('.h5' in f)]
 print('\nNumber of processed ATL03 granules to read in: ' + str(len(filelist)))
