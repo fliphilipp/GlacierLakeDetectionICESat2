@@ -94,7 +94,9 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
                 '/gtx/heights/quality_ph']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     
-    if type(gtxs) == str:
+    if gtxs == 'all':
+        var_list = sum([[v.replace('/gtx','/'+bm) for bm in beam_list] if '/gtx' in v else [v] for v in vars_sub],[])
+    elif type(gtxs) == str:
         var_list = [v.replace('/gtx','/'+gtxs.lower()) if '/gtx' in v else v for v in vars_sub]
     elif type(gtxs) == list:
         var_list = sum([[v.replace('/gtx','/'+bm.lower()) for bm in gtxs] if '/gtx' in v else [v] for v in vars_sub],[])
