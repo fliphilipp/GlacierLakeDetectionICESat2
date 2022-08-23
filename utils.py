@@ -43,24 +43,15 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     """
     
     import requests
-    import getpass
-    import socket 
     import json
     import zipfile
-    import io
-    import math
     import os
     import shutil
-    import pprint
     import re
-    import time
     import geopandas as gpd
-    import fiona
     from shapely.geometry import Polygon, mapping
     from shapely.geometry.polygon import orient
-    from requests.auth import HTTPBasicAuth
     from xml.etree import ElementTree as ET
-    import sys
     import numpy as np
     
     short_name = 'ATL03'
@@ -186,7 +177,7 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
         
     page_size = 100
     request_mode = 'stream'
-    page_num = math.ceil(len(granules)/page_size)
+    page_num = int(np.ceil(len(granules)/page_size))
 
     param_dict = {'short_name': short_name, 
                   'producer_granule_id': granule_id,
