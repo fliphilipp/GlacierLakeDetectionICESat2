@@ -2,5 +2,5 @@
 IS2data/
 __pycache__/
 .ipynb_checkpoints/
-edc_rsa/id_rsa
-
+misc/test1
+.bash_history

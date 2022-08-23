@@ -1,0 +1,27 @@
+
+*********************************
+** GRANULE INFO AND STATISTICS **
+*********************************
+
+ATL03_20210715182907_03381203_005_01.h5
+RGT: 338
+cycle number: 12
+spacecraft orientation: forward
+beam configuation:
+  gt1l : beam 6 (weak)
+  gt1r : beam 5 (strong)
+  gt2l : beam 4 (weak)
+  gt2r : beam 3 (strong)
+  gt3l : beam 2 (weak)
+  gt3r : beam 1 (strong)
+
+PHOTON DATA SUMMARY FOR BEAM GT1L
+          count  nans           min           max
+lat     2593192     0  6.817861e+01  6.904634e+01
+lon     2593192     0 -4.965467e+01 -4.936601e+01
+h       2593192     0 -2.645939e+02  1.594183e+03
+dt      2593192     0  1.116091e+08  1.116091e+08
+mframe  2593192     0  3.213661e+09  3.213661e+09
+qual    2593192     0  0.000000e+00  2.000000e+00
+xatc    2593192     0  7.603724e+06  7.701219e+06
+geoid   2593192     0  2.883285e+01  3.212764e+01

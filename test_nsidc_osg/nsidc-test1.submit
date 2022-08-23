@@ -1,0 +1,21 @@
+universe    = vanilla
+
++SingularityImage = "stash:///osgconnect/public/fliphilipp/containers/simple-test7.sif"
+
+executable  = run_py.sh
+
+transfer_input_files = test1.py, utils.py, misc/test1, misc/test2, shapefiles/jakobshavn_small.cpg, shapefiles/jakobshavn_small.dbf, shapefiles/jakobshavn_small.prj, shapefiles/jakobshavn_small.shp, shapefiles/jakobshavn_small.shx
+
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = stats.txt
+
+log         = job.log
+output      = job.out
+error       = job.error
+
+request_cpus    = 1 
+request_memory  = 2GB
+request_disk    = 2GB
+
+queue 1

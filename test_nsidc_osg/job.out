@@ -1,0 +1,50 @@
+
+Downloading ICESat-2 data. Found granules:
+  ATL03_20210715182907_03381203_005_01.h5, 5065.14 MB
+
+Input shapefile: /shapefiles/jakobshavn_small.shp
+Simplified polygon coordinates based on shapefile input: -49.59098555896507,69.10415896488335,-50.33805587146507,68.42374368072217,-50.01945235584007,68.20452489563448,-48.47038009021507,68.14325568125464,-48.16276290271507,68.66085965388693,-48.12980391834007,69.0963205694427,-49.59098555896507,69.10415896488335
+
+API request URL:
+https://n5eil02u.ecs.nsidc.org/egi/request?short_name=ATL03&producer_granule_id=ATL03_20210715182907_03381203_005_01.h5&version=005&polygon=-49.59098555896507,69.10415896488335,-50.33805587146507,68.42374368072217,-50.01945235584007,68.20452489563448,-48.47038009021507,68.14325568125464,-48.16276290271507,68.66085965388693,-48.12980391834007,69.0963205694427,-49.59098555896507,69.10415896488335&Boundingshape={"type":"FeatureCollection","features":[{"id":"0","type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[-49.59098555896507,69.10415896488335],[-50.33805587146507,68.42374368072217],[-50.01945235584007,68.20452489563448],[-48.47038009021507,68.14325568125464],[-48.16276290271507,68.66085965388693],[-48.12980391834007,69.0963205694427],[-49.59098555896507,69.10415896488335]]]},"bbox":[-50.33805587146507,68.14325568125464,-48.12980391834007,69.10415896488335]}],"bbox":[-50.33805587146507,68.14325568125464,-48.12980391834007,69.10415896488335]}&Coverage=/ancillary_data/atlas_sdp_gps_epoch,/gt1l/bckgrd_atlas/bckgrd_counts,/gt1l/bckgrd_atlas/bckgrd_int_height,/gt1l/bckgrd_atlas/delta_time,/gt1l/bckgrd_atlas/pce_mframe_cnt,/gt1l/geolocation/ph_index_beg,/gt1l/geolocation/segment_dist_x,/gt1l/geolocation/segment_length,/gt1l/geophys_corr/dem_h,/gt1l/geophys_corr/geoid,/gt1l/heights/delta_time,/gt1l/heights/dist_ph_along,/gt1l/heights/h_ph,/gt1l/heights/lat_ph,/gt1l/heights/lon_ph,/gt1l/heights/pce_mframe_cnt,/gt1l/heights/quality_ph,/orbit_info/cycle_number,/orbit_info/rgt,/orbit_info/sc_orient&page_size=100&request_mode=stream&email=yes&page_num=1
+
+Order:  1
+Requesting...
+HTTP response from order response URL:  200
+Downloading...
+Data request 1 is complete.
+
+Unzipped files and cleaned up directory.
+Output data saved in: /IS2data
+
+Number of processed ATL03 granules to read in: 1
+  reading in IS2data/processed_ATL03_20210715182907_03381203_005_01.h5
+  reading in beam: gt1l  --> done.
+
+*********************************
+** GRANULE INFO AND STATISTICS **
+*********************************
+
+ATL03_20210715182907_03381203_005_01.h5
+RGT: 338
+cycle number: 12
+spacecraft orientation: forward
+beam configuation:
+  gt1l : beam 6 (weak)
+  gt1r : beam 5 (strong)
+  gt2l : beam 4 (weak)
+  gt2r : beam 3 (strong)
+  gt3l : beam 2 (weak)
+  gt3r : beam 1 (strong)
+
+PHOTON DATA SUMMARY FOR BEAM GT1L
+          count  nans           min           max
+lat     2593192     0  6.817861e+01  6.904634e+01
+lon     2593192     0 -4.965467e+01 -4.936601e+01
+h       2593192     0 -2.645939e+02  1.594183e+03
+dt      2593192     0  1.116091e+08  1.116091e+08
+mframe  2593192     0  3.213661e+09  3.213661e+09
+qual    2593192     0  0.000000e+00  2.000000e+00
+xatc    2593192     0  7.603724e+06  7.701219e+06
+geoid   2593192     0  2.883285e+01  3.212764e+01
+
