@@ -6,7 +6,7 @@ import rsa
 
 granule = 'ATL03_20210715182907_03381203_005_01.h5'
 shapefile = '/shapefiles/jakobshavn_small.shp'
-gtxs = 'gt1l'
+gtxs = 'all'
 
 datadir = '/IS2data'
 

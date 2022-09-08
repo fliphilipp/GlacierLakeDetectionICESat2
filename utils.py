@@ -3,7 +3,7 @@
 # Author: Philipp S. Arndt, Scripps Polar Center, UCSD                                  #
 #########################################################################################
 
-def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid, pwd): 
+def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid, pwd, vars_sub='default'): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,
     subsets it to a given shapefile, and puts it into the specified
@@ -63,26 +63,30 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     shapefile_filepath = str(os.getcwd() + shapefile)
     
     # set the variables for subsetting
-    vars_sub = ['/ancillary_data/atlas_sdp_gps_epoch',
-                '/orbit_info/rgt',
-                '/orbit_info/cycle_number',
-                '/orbit_info/sc_orient',
-                '/gtx/geolocation/ph_index_beg',
-                '/gtx/geolocation/segment_dist_x',
-                '/gtx/geolocation/segment_length',
-                '/gtx/geophys_corr/dem_h',
-                '/gtx/geophys_corr/geoid',
-                '/gtx/bckgrd_atlas/pce_mframe_cnt',
-                '/gtx/bckgrd_atlas/bckgrd_counts',
-                '/gtx/bckgrd_atlas/bckgrd_int_height',
-                '/gtx/bckgrd_atlas/delta_time',
-                '/gtx/heights/lat_ph',
-                '/gtx/heights/lon_ph',
-                '/gtx/heights/h_ph',
-                '/gtx/heights/dist_ph_along',
-                '/gtx/heights/delta_time',
-                '/gtx/heights/pce_mframe_cnt',
-                '/gtx/heights/quality_ph']
+    if vars_sub == 'default':
+        vars_sub = ['/ancillary_data/atlas_sdp_gps_epoch',
+                    '/orbit_info/rgt',
+                    '/orbit_info/cycle_number',
+                    '/orbit_info/sc_orient',
+                    # '/gtx/geolocation/segment_id',
+                    '/gtx/geolocation/ph_index_beg',
+                    '/gtx/geolocation/segment_dist_x',
+                    '/gtx/geolocation/segment_length',
+                    # '/gtx/geolocation/segment_ph_cnt',
+                    '/gtx/geophys_corr/dem_h',
+                    '/gtx/geophys_corr/geoid',
+                    '/gtx/bckgrd_atlas/pce_mframe_cnt',
+                    '/gtx/bckgrd_atlas/bckgrd_counts',
+                    '/gtx/bckgrd_atlas/bckgrd_int_height',
+                    '/gtx/bckgrd_atlas/delta_time',
+                    '/gtx/heights/lat_ph',
+                    '/gtx/heights/lon_ph',
+                    '/gtx/heights/h_ph',
+                    '/gtx/heights/dist_ph_along',
+                    '/gtx/heights/delta_time',
+                    '/gtx/heights/pce_mframe_cnt',
+                    # '/gtx/heights/signal_conf_ph',
+                    '/gtx/heights/quality_ph']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     
     if gtxs == 'all':
@@ -160,7 +164,10 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     def intersection(lst1, lst2):
         lst3 = [value for value in lst1 if value in lst2]
         return lst3
-    var_list_subsetting = intersection(variable_vals,var_list)
+    if vars_sub == 'all':
+        var_list_subsetting = variable_vals
+    else:
+        var_list_subsetting = intersection(variable_vals,var_list)
     
     if len(subagent) < 1 :
         print('No services exist for', short_name, 'version', latest_version)
