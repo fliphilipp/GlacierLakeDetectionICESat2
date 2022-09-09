@@ -171,7 +171,7 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
     Examples
     --------
     >>> download_granule_nsidc(granule_id='ATL03_20210715182907_03381203_005_01.h5', 
-                               geojson='/geojsons/jakobshavn.geojson', 
+                               geojson='geojsons/jakobshavn.geojson', 
                                gtxs='all'
                                granule_output_path='/IS2data', 
                                uid='myuserid', 
@@ -196,7 +196,7 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
     capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/{short_name}.{version}.xml'
     base_url = 'https://n5eil02u.ecs.nsidc.org/egi/request'
     
-    geojson_filepath = str(os.getcwd() + geojson)
+    geojson_filepath = str(os.getcwd() + '/' + geojson)
     
     # set the variables for subsetting
     if vars_sub == 'default':
