@@ -4,6 +4,58 @@ NOTE: This repo is private for now. (early testing stage)
 
 **A repository for automatic supraglacial lake detection on the ice sheets in ICESat-2 data**
 
+## Useful commands for OSG:
+
+Login to access node with SSH Keys set up
+([Generate SSH Keys and Activate Your OSG Login](https://support.opensciencegrid.org/support/solutions/articles/12000027675)):
+```
+ssh <username>@<osg-login-node>
+```
+Example:
+```
+ssh fliphilipp@login05.osgconnect.net
+```
+
+Submit a file to HTCondor:
+```
+condor_submit <my_submit-file.submit>
+```
+
+Watch the progress of the queue after submitting jobs:
+```
+watch condor_q
+```
+
+See which jobs are on hold and why:
+```
+condor_q -hold
+```
+
+Release and re-queue jobs on hold:
+```
+condor_release <cluster ID>/<job ID>/<username>
+```
+
+Remove jobs on hold:
+```
+condor_rm <cluster ID>/<job ID>/<username>
+```
+
+Example to grep log files for memory/disk usage:
+```
+grep -A 3 'Partitionable Resources' <log_directory>/*.log
+```
+
+Put a container in /public stash:
+```
+scp <mycontainer>.sif fliphilipp@login05.osgconnect.net:/public/fliphilipp/containers/
+```
+
+Explore a container on access node:
+```
+singularity shell --home $PWD:/srv --pwd /srv --scratch /var/tmp --scratch /tmp --contain --ipc --pid /public/fliphilipp/containers/<mycontainer>.sif
+```
+
 ## To get Singularity working with root privileges:
 
 Get some required packages: 
