@@ -1,0 +1,16 @@
+
+*********************************
+** GRANULE INFO AND STATISTICS **
+*********************************
+
+ATL03_20210805172149_06581203_005_01.h5
+RGT: 658
+cycle number: 12
+spacecraft orientation: forward
+beam configuation:
+  gt1l : beam 6 (weak)
+  gt1r : beam 5 (strong)
+  gt2l : beam 4 (weak)
+  gt2r : beam 3 (strong)
+  gt3l : beam 2 (weak)
+  gt3r : beam 1 (strong)

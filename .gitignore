@@ -5,3 +5,6 @@ __pycache__/
 misc/test1
 *.bash_history
 *.python_history
+*.log
+*.err
+*.out

@@ -1,0 +1,38 @@
+
+*********************************
+** GRANULE INFO AND STATISTICS **
+*********************************
+
+ATL03_20210831045110_10471205_005_01.h5
+RGT: 1047
+cycle number: 12
+spacecraft orientation: forward
+beam configuation:
+  gt1l : beam 6 (weak)
+  gt1r : beam 5 (strong)
+  gt2l : beam 4 (weak)
+  gt2r : beam 3 (strong)
+  gt3l : beam 2 (weak)
+  gt3r : beam 1 (strong)
+
+PHOTON DATA SUMMARY FOR BEAM GT3L
+         count  nans           min           max
+lat     102949     0  6.850262e+01  6.883027e+01
+lon     102949     0 -4.825682e+01 -4.814995e+01
+h       102949     0  1.323180e+03  1.517615e+03
+dt      102949     0  1.156208e+08  1.156209e+08
+mframe  102949     0  3.414535e+09  3.414535e+09
+qual    102949     0  0.000000e+00  2.000000e+00
+xatc    102949     0  1.239508e+07  1.243188e+07
+geoid   102949     0  3.320930e+01  3.371341e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT3R
+         count  nans           min           max
+lat     448022     0  6.849435e+01  6.883909e+01
+lon     448022     0 -4.826173e+01 -4.814928e+01
+h       448022     0  1.320492e+03  1.535041e+03
+dt      448022     0  1.156208e+08  1.156209e+08
+mframe  448022     0  3.414535e+09  3.414535e+09
+qual    448022     0  0.000000e+00  2.000000e+00
+xatc    448022     0  1.239409e+07  1.243282e+07
+geoid   448022     0  3.319447e+01  3.371825e+01

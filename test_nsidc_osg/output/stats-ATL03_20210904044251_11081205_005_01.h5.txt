@@ -1,0 +1,82 @@
+
+*********************************
+** GRANULE INFO AND STATISTICS **
+*********************************
+
+ATL03_20210904044251_11081205_005_01.h5
+RGT: 1108
+cycle number: 12
+spacecraft orientation: forward
+beam configuation:
+  gt1l : beam 6 (weak)
+  gt1r : beam 5 (strong)
+  gt2l : beam 4 (weak)
+  gt2r : beam 3 (strong)
+  gt3l : beam 2 (weak)
+  gt3r : beam 1 (strong)
+
+PHOTON DATA SUMMARY FOR BEAM GT1L
+        count  nans           min           max
+lat       872     0  6.816401e+01  6.909918e+01
+lon       872     0 -4.898695e+01 -4.867568e+01
+h         872     0  4.891943e+02  1.999819e+03
+dt        872     0  1.159659e+08  1.159660e+08
+mframe    872     0  3.431504e+09  3.431504e+09
+qual      872     0  0.000000e+00  2.000000e+00
+xatc      872     0  1.236408e+07  1.246915e+07
+geoid     872     0  3.144903e+01  3.303533e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT1R
+        count  nans           min           max
+lat      2075     0  6.816446e+01  6.909913e+01
+lon      2075     0 -4.898880e+01 -4.867783e+01
+h        2075     0  4.792328e+02  2.005124e+03
+dt       2075     0  1.159659e+08  1.159660e+08
+mframe   2075     0  3.431504e+09  3.431504e+09
+qual     2075     0  0.000000e+00  2.000000e+00
+xatc     2075     0  1.236409e+07  1.246911e+07
+geoid    2075     0  3.144254e+01  3.302917e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT2L
+        count  nans           min           max
+lat       698     0  6.816874e+01  6.909449e+01
+lon       698     0 -4.906383e+01 -4.875913e+01
+h         698     0 -7.213519e+01  1.992712e+03
+dt        698     0  1.159659e+08  1.159660e+08
+mframe    698     0  1.791268e+09  1.791269e+09
+qual      698     0  0.000000e+00  2.000000e+00
+xatc      698     0  1.236500e+07  1.246900e+07
+geoid     698     0  3.121006e+01  3.283632e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT2R
+        count  nans           min           max
+lat      1283     0  6.816701e+01  6.909781e+01
+lon      1283     0 -4.906648e+01 -4.876016e+01
+h        1283     0 -4.395119e+01  2.014835e+03
+dt       1283     0  1.159659e+08  1.159660e+08
+mframe   1283     0  1.791268e+09  1.791269e+09
+qual     1283     0  0.000000e+00  2.000000e+00
+xatc     1283     0  1.236464e+07  1.246921e+07
+geoid    1283     0  3.120360e+01  3.283788e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT3L
+        count  nans           min           max
+lat       939     0  6.817094e+01  6.909991e+01
+lon       939     0 -4.914173e+01 -4.883911e+01
+h         939     0 -8.573457e+01  2.022025e+03
+dt        939     0  1.159659e+08  1.159660e+08
+mframe    939     0  3.431790e+09  3.431790e+09
+qual      939     0  0.000000e+00  2.000000e+00
+xatc      939     0  1.236478e+07  1.246914e+07
+geoid     939     0  3.096785e+01  3.264815e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT3R
+        count  nans           min           max
+lat      2073     0  6.817051e+01  6.909915e+01
+lon      2073     0 -4.914402e+01 -4.884151e+01
+h        2073     0 -7.978190e+01  2.013434e+03
+dt       2073     0  1.159659e+08  1.159660e+08
+mframe   2073     0  3.431790e+09  3.431790e+09
+qual     2073     0  0.000000e+00  2.000000e+00
+xatc     2073     0  1.236488e+07  1.246919e+07
+geoid    2073     0  3.096146e+01  3.264515e+01

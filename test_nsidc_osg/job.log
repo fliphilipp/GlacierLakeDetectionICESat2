@@ -188,3 +188,41 @@
 
 	Job terminated by itself at 2022-08-24T00:27:05Z (using method 0: OF_ITS_OWN_ACCORD).
 ...
+000 (23288765.000.000) 2022-09-09 03:33:16 Job submitted from host: <192.170.231.218:9618?addrs=192.170.231.218-9618+[2605-9a00-10-200b-e643-4bff-fe9e-1f52]-9618&alias=login05.osgconnect.net&noUDP&sock=schedd_1654299_1802>
+...
+040 (23288765.000.000) 2022-09-09 03:33:48 Started transferring input files
+	Transferring to host: <10.138.11.15:42179?addrs=10.138.11.15-42179&alias=c1115.crane.hcc.unl.edu&noUDP>
+...
+040 (23288765.000.000) 2022-09-09 03:34:06 Finished transferring input files
+...
+001 (23288765.000.000) 2022-09-09 03:34:06 Job executing on host: <10.138.11.15:42649?CCBID=128.104.103.162:9618%3faddrs%3d128.104.103.162-9618%26alias%3dospool-ccb.osg.chtc.io%26noUDP%26sock%3dcollector4#2363439%20192.170.236.224:9618%3faddrs%3d192.170.236.224-9618+[fd12-3456-789a-10f2-e861-4af-5cee-be87]-9618%26alias%3d192.170.236.224%26noUDP%26sock%3dcollector4#2493541&PrivNet=c1115.crane.hcc.unl.edu&addrs=10.138.11.15-42649&alias=c1115.crane.hcc.unl.edu&noUDP>
+...
+006 (23288765.000.000) 2022-09-09 03:34:14 Image size of job updated: 1
+	4  -  MemoryUsage of job (MB)
+	3304  -  ResidentSetSize of job (KB)
+...
+006 (23288765.000.000) 2022-09-09 03:35:05 Image size of job updated: 3190832
+	589  -  MemoryUsage of job (MB)
+	602580  -  ResidentSetSize of job (KB)
+...
+040 (23288765.000.000) 2022-09-09 03:35:05 Started transferring output files
+...
+040 (23288765.000.000) 2022-09-09 03:35:05 Finished transferring output files
+...
+005 (23288765.000.000) 2022-09-09 03:35:05 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 0 00:00:04, Sys 0 00:00:02  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:00:04, Sys 0 00:00:02  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	12162  -  Run Bytes Sent By Job
+	32483  -  Run Bytes Received By Job
+	12162  -  Total Bytes Sent By Job
+	32483  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :                 1         1 
+	   Disk (KB)            :  1134398  2097152 111736324 
+	   Memory (MB)          :      589     2048      4096 
+
+	Job terminated of its own accord at 2022-09-09T08:35:05Z with exit-code 0.
+...

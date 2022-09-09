@@ -6,8 +6,8 @@ import rsa
 import argparse
 
 # move input files
-os.system("mkdir misc && mkdir geojsons")
-os.system("mv test1 misc/ && mv test2 misc/ && mv *.geojson geojsons/")
+# os.system("mkdir misc && mkdir geojsons")
+# os.system("mv test1 misc/ && mv test2 misc/ && mv *.geojson geojsons/")
 
 # parse command line arguments
 parser = argparse.ArgumentParser(description='Test script to print some stats for a given ICESat-2 ATL03 granule.')

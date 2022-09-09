@@ -2,10 +2,10 @@
 
 # move input files
 mkdir misc
-mkdir shapefiles
+mkdir geojsons
 mv test1 misc/
 mv test2 misc/
-mv jakobshavn_small.* shapefiles/
+mv *.geojson geojsons/
 
 # Run the Python script 
-python3 test1.py
+python3 test1.py --granule $1 --polygon $2

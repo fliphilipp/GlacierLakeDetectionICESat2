@@ -5,10 +5,9 @@ INFO  Discarding path '/hdfs'. File does not exist
 INFO  Discarding path '/lizard'. File does not exist
 INFO  Discarding path '/mnt/hadoop'. File does not exist
 INFO  Discarding path '/mnt/hdfs'. File does not exist
-INFO  Discarding path '/cvmfs'. File does not exist
 
 ArgumentError: activate does not accept more than one argument:
-['/srv/.gwms-user-job-wrapper.sh', '/srv/condor_exec.exe']
+['/srv/.gwms-user-job-wrapper.sh', '/srv/condor_exec.exe', 'ATL03_20210503103512_06051105_005_01.h5', 'geojsons/jakobshavn_small.geojson']
 
 
 proj_create: Open of /opt/conda/share/proj failed

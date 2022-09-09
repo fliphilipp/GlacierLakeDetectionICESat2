@@ -1,12 +1,12 @@
 
 Downloading ICESat-2 data. Found granules:
-  ATL03_20210715182907_03381203_005_01.h5, 5065.14 MB
+  ATL03_20210503103512_06051105_005_01.h5, 4393.14 MB
 
-Input shapefile: /shapefiles/jakobshavn_small.shp
-Simplified polygon coordinates based on shapefile input: -49.59098555896507,69.10415896488335,-50.33805587146507,68.42374368072217,-50.01945235584007,68.20452489563448,-48.47038009021507,68.14325568125464,-48.16276290271507,68.66085965388693,-48.12980391834007,69.0963205694427,-49.59098555896507,69.10415896488335
+Input geojson: geojsons/jakobshavn_small.geojson
+Simplified polygon coordinates based on geojson input: -49.59098555896507,69.10415896488335,-50.33805587146507,68.42374368072217,-50.01945235584007,68.20452489563448,-48.47038009021507,68.14325568125464,-48.16276290271507,68.66085965388693,-48.12980391834007,69.0963205694427,-49.59098555896507,69.10415896488335
 
 API request URL:
-https://n5eil02u.ecs.nsidc.org/egi/request?short_name=ATL03&producer_granule_id=ATL03_20210715182907_03381203_005_01.h5&version=005&polygon=-49.59098555896507,69.10415896488335,-50.33805587146507,68.42374368072217,-50.01945235584007,68.20452489563448,-48.47038009021507,68.14325568125464,-48.16276290271507,68.66085965388693,-48.12980391834007,69.0963205694427,-49.59098555896507,69.10415896488335&Boundingshape={"type":"FeatureCollection","features":[{"id":"0","type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[-49.59098555896507,69.10415896488335],[-50.33805587146507,68.42374368072217],[-50.01945235584007,68.20452489563448],[-48.47038009021507,68.14325568125464],[-48.16276290271507,68.66085965388693],[-48.12980391834007,69.0963205694427],[-49.59098555896507,69.10415896488335]]]},"bbox":[-50.33805587146507,68.14325568125464,-48.12980391834007,69.10415896488335]}],"bbox":[-50.33805587146507,68.14325568125464,-48.12980391834007,69.10415896488335]}&Coverage=/ancillary_data/atlas_sdp_gps_epoch,/gt1l/bckgrd_atlas/bckgrd_counts,/gt1l/bckgrd_atlas/bckgrd_int_height,/gt1l/bckgrd_atlas/delta_time,/gt1l/bckgrd_atlas/pce_mframe_cnt,/gt1l/geolocation/ph_index_beg,/gt1l/geolocation/segment_dist_x,/gt1l/geolocation/segment_length,/gt1l/geophys_corr/dem_h,/gt1l/geophys_corr/geoid,/gt1l/heights/delta_time,/gt1l/heights/dist_ph_along,/gt1l/heights/h_ph,/gt1l/heights/lat_ph,/gt1l/heights/lon_ph,/gt1l/heights/pce_mframe_cnt,/gt1l/heights/quality_ph,/orbit_info/cycle_number,/orbit_info/rgt,/orbit_info/sc_orient&page_size=100&request_mode=stream&email=yes&page_num=1
+https://n5eil02u.ecs.nsidc.org/egi/request?short_name=ATL03&producer_granule_id=ATL03_20210503103512_06051105_005_01.h5&version=005&polygon=-49.59098555896507,69.10415896488335,-50.33805587146507,68.42374368072217,-50.01945235584007,68.20452489563448,-48.47038009021507,68.14325568125464,-48.16276290271507,68.66085965388693,-48.12980391834007,69.0963205694427,-49.59098555896507,69.10415896488335&Boundingshape={"type":"FeatureCollection","features":[{"id":"0","type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[-49.59098555896507,69.10415896488335],[-50.33805587146507,68.42374368072217],[-50.01945235584007,68.20452489563448],[-48.47038009021507,68.14325568125464],[-48.16276290271507,68.66085965388693],[-48.12980391834007,69.0963205694427],[-49.59098555896507,69.10415896488335]]]},"bbox":[-50.33805587146507,68.14325568125464,-48.12980391834007,69.10415896488335]}],"bbox":[-50.33805587146507,68.14325568125464,-48.12980391834007,69.10415896488335]}&Coverage=/ancillary_data/atlas_sdp_gps_epoch,/gt1l/bckgrd_atlas/bckgrd_counts,/gt1l/bckgrd_atlas/bckgrd_int_height,/gt1l/bckgrd_atlas/delta_time,/gt1l/bckgrd_atlas/pce_mframe_cnt,/gt1l/geolocation/ph_index_beg,/gt1l/geolocation/segment_dist_x,/gt1l/geolocation/segment_length,/gt1l/geophys_corr/dem_h,/gt1l/geophys_corr/geoid,/gt1l/heights/delta_time,/gt1l/heights/dist_ph_along,/gt1l/heights/h_ph,/gt1l/heights/lat_ph,/gt1l/heights/lon_ph,/gt1l/heights/pce_mframe_cnt,/gt1l/heights/quality_ph,/gt1r/bckgrd_atlas/bckgrd_counts,/gt1r/bckgrd_atlas/bckgrd_int_height,/gt1r/bckgrd_atlas/delta_time,/gt1r/bckgrd_atlas/pce_mframe_cnt,/gt1r/geolocation/ph_index_beg,/gt1r/geolocation/segment_dist_x,/gt1r/geolocation/segment_length,/gt1r/geophys_corr/dem_h,/gt1r/geophys_corr/geoid,/gt1r/heights/delta_time,/gt1r/heights/dist_ph_along,/gt1r/heights/h_ph,/gt1r/heights/lat_ph,/gt1r/heights/lon_ph,/gt1r/heights/pce_mframe_cnt,/gt1r/heights/quality_ph,/gt2l/bckgrd_atlas/bckgrd_counts,/gt2l/bckgrd_atlas/bckgrd_int_height,/gt2l/bckgrd_atlas/delta_time,/gt2l/bckgrd_atlas/pce_mframe_cnt,/gt2l/geolocation/ph_index_beg,/gt2l/geolocation/segment_dist_x,/gt2l/geolocation/segment_length,/gt2l/geophys_corr/dem_h,/gt2l/geophys_corr/geoid,/gt2l/heights/delta_time,/gt2l/heights/dist_ph_along,/gt2l/heights/h_ph,/gt2l/heights/lat_ph,/gt2l/heights/lon_ph,/gt2l/heights/pce_mframe_cnt,/gt2l/heights/quality_ph,/gt2r/bckgrd_atlas/bckgrd_counts,/gt2r/bckgrd_atlas/bckgrd_int_height,/gt2r/bckgrd_atlas/delta_time,/gt2r/bckgrd_atlas/pce_mframe_cnt,/gt2r/geolocation/ph_index_beg,/gt2r/geolocation/segment_dist_x,/gt2r/geolocation/segment_length,/gt2r/geophys_corr/dem_h,/gt2r/geophys_corr/geoid,/gt2r/heights/delta_time,/gt2r/heights/dist_ph_along,/gt2r/heights/h_ph,/gt2r/heights/lat_ph,/gt2r/heights/lon_ph,/gt2r/heights/pce_mframe_cnt,/gt2r/heights/quality_ph,/gt3l/bckgrd_atlas/bckgrd_counts,/gt3l/bckgrd_atlas/bckgrd_int_height,/gt3l/bckgrd_atlas/delta_time,/gt3l/bckgrd_atlas/pce_mframe_cnt,/gt3l/geolocation/ph_index_beg,/gt3l/geolocation/segment_dist_x,/gt3l/geolocation/segment_length,/gt3l/geophys_corr/dem_h,/gt3l/geophys_corr/geoid,/gt3l/heights/delta_time,/gt3l/heights/dist_ph_along,/gt3l/heights/h_ph,/gt3l/heights/lat_ph,/gt3l/heights/lon_ph,/gt3l/heights/pce_mframe_cnt,/gt3l/heights/quality_ph,/gt3r/bckgrd_atlas/bckgrd_counts,/gt3r/bckgrd_atlas/bckgrd_int_height,/gt3r/bckgrd_atlas/delta_time,/gt3r/bckgrd_atlas/pce_mframe_cnt,/gt3r/geolocation/ph_index_beg,/gt3r/geolocation/segment_dist_x,/gt3r/geolocation/segment_length,/gt3r/geophys_corr/dem_h,/gt3r/geophys_corr/geoid,/gt3r/heights/delta_time,/gt3r/heights/dist_ph_along,/gt3r/heights/h_ph,/gt3r/heights/lat_ph,/gt3r/heights/lon_ph,/gt3r/heights/pce_mframe_cnt,/gt3r/heights/quality_ph,/orbit_info/cycle_number,/orbit_info/rgt,/orbit_info/sc_orient&page_size=100&request_mode=stream&email=yes&page_num=1
 
 Order:  1
 Requesting...
@@ -18,16 +18,16 @@ Unzipped files and cleaned up directory.
 Output data saved in: /IS2data
 
 Number of processed ATL03 granules to read in: 1
-  reading in IS2data/processed_ATL03_20210715182907_03381203_005_01.h5
-  reading in beam: gt1l  --> done.
+  reading in IS2data/processed_ATL03_20210503103512_06051105_005_01.h5
+  reading in beam: gt1l gt1r gt2l gt2r gt3l gt3r  --> done.
 
 *********************************
 ** GRANULE INFO AND STATISTICS **
 *********************************
 
-ATL03_20210715182907_03381203_005_01.h5
-RGT: 338
-cycle number: 12
+ATL03_20210503103512_06051105_005_01.h5
+RGT: 605
+cycle number: 11
 spacecraft orientation: forward
 beam configuation:
   gt1l : beam 6 (weak)
@@ -38,13 +38,68 @@ beam configuation:
   gt3r : beam 1 (strong)
 
 PHOTON DATA SUMMARY FOR BEAM GT1L
+         count  nans           min           max
+lat     968195     0  6.814344e+01  6.909647e+01
+lon     968195     0 -4.847419e+01 -4.815702e+01
+h       968195     0  1.211037e+03  1.512307e+03
+dt      968195     0  1.052735e+08  1.052735e+08
+mframe  968195     0  2.896881e+09  2.896881e+09
+qual    968195     0  0.000000e+00  2.000000e+00
+xatc    968195     0  1.236438e+07  1.247146e+07
+geoid   968195     0  3.285706e+01  3.426588e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT1R
           count  nans           min           max
-lat     2593192     0  6.817861e+01  6.904634e+01
-lon     2593192     0 -4.965467e+01 -4.936601e+01
-h       2593192     0 -2.645939e+02  1.594183e+03
-dt      2593192     0  1.116091e+08  1.116091e+08
-mframe  2593192     0  3.213661e+09  3.213661e+09
-qual    2593192     0  0.000000e+00  2.000000e+00
-xatc    2593192     0  7.603724e+06  7.701219e+06
-geoid   2593192     0  2.883285e+01  3.212764e+01
+lat     1946721     0  6.814354e+01  6.909639e+01
+lon     1946721     0 -4.847631e+01 -4.815930e+01
+h       1946721     0  1.207926e+03  1.511556e+03
+dt      1946721     0  1.052735e+08  1.052735e+08
+mframe  1946721     0  2.896881e+09  2.896881e+09
+qual    1946721     0  0.000000e+00  2.000000e+00
+xatc    1946721     0  1.236440e+07  1.247146e+07
+geoid   1946721     0  3.285130e+01  3.426119e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT2L
+         count  nans           min           max
+lat     961879     0  6.814652e+01  6.909696e+01
+lon     961879     0 -4.855151e+01 -4.823862e+01
+h       961879     0  1.204852e+03  1.496673e+03
+dt      961879     0  1.052735e+08  1.052735e+08
+mframe  961879     0  1.256645e+09  1.256646e+09
+qual    961879     0  0.000000e+00  2.000000e+00
+xatc    961879     0  1.236472e+07  1.247150e+07
+geoid   961879     0  3.264972e+01  3.409398e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT2R
+          count  nans           min           max
+lat     1608082     0  6.814661e+01  6.909688e+01
+lon     1608082     0 -4.855364e+01 -4.824091e+01
+h       1608082     0  1.204901e+03  1.494293e+03
+dt      1608082     0  1.052735e+08  1.052735e+08
+mframe  1608082     0  1.256645e+09  1.256646e+09
+qual    1608082     0  0.000000e+00  2.000000e+00
+xatc    1608082     0  1.236474e+07  1.247150e+07
+geoid   1608082     0  3.264398e+01  3.408910e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT3L
+         count  nans           min           max
+lat     909968     0  6.814956e+01  6.909742e+01
+lon     909968     0 -4.862897e+01 -4.832037e+01
+h       909968     0  1.173717e+03  1.469523e+03
+dt      909968     0  1.052735e+08  1.052735e+08
+mframe  909968     0  2.897167e+09  2.897167e+09
+qual    909968     0  0.000000e+00  2.000000e+00
+xatc    909968     0  1.236506e+07  1.247154e+07
+geoid   909968     0  3.244274e+01  3.391515e+01
+
+PHOTON DATA SUMMARY FOR BEAM GT3R
+          count  nans           min           max
+lat     1984467     0  6.814965e+01  6.909733e+01
+lon     1984467     0 -4.863105e+01 -4.832257e+01
+h       1984467     0  1.170614e+03  1.466334e+03
+dt      1984467     0  1.052735e+08  1.052735e+08
+mframe  1984467     0  2.897167e+09  2.897167e+09
+qual    1984467     0  0.000000e+00  2.000000e+00
+xatc    1984467     0  1.236508e+07  1.247154e+07
+geoid   1984467     0  3.243718e+01  3.391022e+01
 
