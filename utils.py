@@ -3,6 +3,141 @@
 # Author: Philipp S. Arndt, Scripps Polar Center, UCSD                                  #
 #########################################################################################
 
+def shp2geojson_nsidc(shapefile, output_directory = 'geojsons/'):
+    """
+    Convert a shapefile to a geojson polygon file that can be used to 
+    subset data from NSIDC. This already simplifies large polygons
+    to reduce file size.
+
+    Parameters
+    ----------
+    shapefile : string
+        the path to the shapefile to convert
+    output_directory : string
+        the directory in which to write the geojson file
+
+    Returns
+    -------
+    nothing
+
+    Examples
+    --------
+    >>> shp2geojson_nsidc(my_shapefile.shp, output_directory = 'geojsons/')
+    """    
+    
+    import geopandas as gpd
+    import os
+    from shapely.geometry.polygon import orient
+    
+    outfilename = shapefile.replace('.shp', '.geojson')
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    if outfilename[outfilename.rfind('/'):] != -1:
+        outfilename = output_directory + outfilename[outfilename.rfind('/')+1:]
+    else:
+        outfilename = output_directory + outfilename
+
+    gdf = gpd.read_file(shapefile)
+    poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    gpd.GeoSeries(poly).to_file(outfilename, driver='GeoJSON')
+    print('Wrote file: %s' % outfilename)
+    
+    
+def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
+    """
+    Query for available granules over a region of interest and a start
+    and end date. This will write a csv file with one column being the 
+    available granule producer IDs and the other one the path to the 
+    shapefile that needs to be used to subset them. 
+
+    Parameters
+    ----------
+    geojson : string
+        the filename of the geojson file
+    start_date : string
+        the start date in 'YYYY-MM-DD' format
+    end_date : string
+        the end date in 'YYYY-MM-DD' format
+    list_out_name : string
+        the path+filename of the csv file to be written out
+    geojson_dir_local : string
+        the path to the directory in which the geojson file is stored locally
+    geojson_dir_remote : string
+        the path to the directory in which the geojson file is stashed remotely
+        if None (default) it will be the same as the local path
+
+    Returns
+    -------
+    nothing, writes csv file to path given by list_out_name
+
+    Examples
+    --------
+    >>> make_granule_list(my_geojson.geojson, '2021-05-01', '2021-09-15', 'granule_lists/my_geojson_2021.csv', 
+                          geojson_dir_local='geojsons/', geojson_dir_remote=None)
+    """    
+    
+    import os
+    import requests
+    import json
+    import geopandas as gpd
+    import pandas as pd
+    from shapely.geometry.polygon import orient
+
+    short_name = 'ATL03'
+    start_time = '00:00:00'
+    end_time = '00:00:00'
+    temporal = start_date + 'T' + start_time + 'Z' + ',' + end_date + 'T' + end_time + 'Z'
+
+    cmr_collections_url = 'https://cmr.earthdata.nasa.gov/search/collections.json'
+    granule_search_url = 'https://cmr.earthdata.nasa.gov/search/granules'
+    base_url = 'https://n5eil02u.ecs.nsidc.org/egi/request'
+
+    # Get json response from CMR collection metadata
+    params = {'short_name': short_name}
+    response = requests.get(cmr_collections_url, params=params)
+    results = json.loads(response.content)
+
+    # Find all instances of 'version_id' in metadata and print most recent version number
+    versions = [el['version_id'] for el in results['feed']['entry']]
+    latest_version = max(versions)
+    capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/{short_name}.{latest_version}.xml'
+
+    # read in shapefile
+    gdf = gpd.read_file(geojson_dir_local + geojson)
+    poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    polygon = ','.join([str(c) for xy in zip(*poly.exterior.coords.xy) for c in xy])
+    polygon
+    search_params = {'short_name': short_name, 'version': latest_version, 'temporal': temporal, 'page_size': 100,
+                     'page_num': 1,'polygon': polygon}
+
+    # query for granules 
+    granules = []
+    headers={'Accept': 'application/json'}
+    while True:
+        response = requests.get(granule_search_url, params=search_params, headers=headers)
+        results = json.loads(response.content)
+
+        if len(results['feed']['entry']) == 0:
+            break # Out of results, so break out of loop
+
+        # Collect results and increment page_num
+        granules.extend(results['feed']['entry'])
+        search_params['page_num'] += 1
+
+    print('Found %i %s version %s granules over %s between %s and %s.' % (len(granules), short_name, latest_version, 
+                                                                          geojson, start_date, end_date))
+
+    granule_list = [g['producer_granule_id'] for g in granules]
+    if geojson_dir_remote is None:
+        geojson_remote = geojson_dir_local + geojson
+    else:
+        geojson_remote = geojson_dir_remote + geojson
+
+    thisdf = pd.DataFrame({'granule': granule_list, 'geojson': geojson_remote})
+    thisdf.to_csv(list_out_name, header=False, index=False)
+    print('Wrote file: %s' % list_out_name)
+    
+
 def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid, pwd, vars_sub='default'): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,
