@@ -3,4 +3,5 @@ IS2data/
 __pycache__/
 .ipynb_checkpoints/
 misc/test1
-.bash_history
+*.bash_history
+*.python_history

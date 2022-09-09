@@ -5,6 +5,7 @@ INFO  Discarding path '/hdfs'. File does not exist
 INFO  Discarding path '/lizard'. File does not exist
 INFO  Discarding path '/mnt/hadoop'. File does not exist
 INFO  Discarding path '/mnt/hdfs'. File does not exist
+INFO  Discarding path '/cvmfs'. File does not exist
 
 ArgumentError: activate does not accept more than one argument:
 ['/srv/.gwms-user-job-wrapper.sh', '/srv/condor_exec.exe']

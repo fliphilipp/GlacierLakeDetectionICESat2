@@ -3,12 +3,148 @@
 # Author: Philipp S. Arndt, Scripps Polar Center, UCSD                                  #
 #########################################################################################
 
-def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid, pwd): 
+def shp2geojson_nsidc(shapefile, output_directory = 'geojsons/'):
+    """
+    Convert a shapefile to a geojson polygon file that can be used to 
+    subset data from NSIDC. This already simplifies large polygons
+    to reduce file size.
+
+    Parameters
+    ----------
+    shapefile : string
+        the path to the shapefile to convert
+    output_directory : string
+        the directory in which to write the geojson file
+
+    Returns
+    -------
+    nothing
+
+    Examples
+    --------
+    >>> shp2geojson_nsidc(my_shapefile.shp, output_directory = 'geojsons/')
+    """    
+    
+    import geopandas as gpd
+    import os
+    from shapely.geometry.polygon import orient
+    
+    outfilename = shapefile.replace('.shp', '.geojson')
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    if outfilename[outfilename.rfind('/'):] != -1:
+        outfilename = output_directory + outfilename[outfilename.rfind('/')+1:]
+    else:
+        outfilename = output_directory + outfilename
+
+    gdf = gpd.read_file(shapefile)
+    poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    gpd.GeoSeries(poly).to_file(outfilename, driver='GeoJSON')
+    print('Wrote file: %s' % outfilename)
+    
+    
+def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
+    """
+    Query for available granules over a region of interest and a start
+    and end date. This will write a csv file with one column being the 
+    available granule producer IDs and the other one the path to the 
+    geojson file that needs to be used to subset them. 
+
+    Parameters
+    ----------
+    geojson : string
+        the filename of the geojson file
+    start_date : string
+        the start date in 'YYYY-MM-DD' format
+    end_date : string
+        the end date in 'YYYY-MM-DD' format
+    list_out_name : string
+        the path+filename of the csv file to be written out
+    geojson_dir_local : string
+        the path to the directory in which the geojson file is stored locally
+    geojson_dir_remote : string
+        the path to the directory in which the geojson file is stashed remotely
+        if None (default) it will be the same as the local path
+
+    Returns
+    -------
+    nothing, writes csv file to path given by list_out_name
+
+    Examples
+    --------
+    >>> make_granule_list(my_geojson.geojson, '2021-05-01', '2021-09-15', 'granule_lists/my_geojson_2021.csv', 
+                          geojson_dir_local='geojsons/', geojson_dir_remote=None)
+    """    
+    
+    import os
+    import requests
+    import json
+    import geopandas as gpd
+    import pandas as pd
+    from shapely.geometry.polygon import orient
+
+    short_name = 'ATL03'
+    start_time = '00:00:00'
+    end_time = '00:00:00'
+    temporal = start_date + 'T' + start_time + 'Z' + ',' + end_date + 'T' + end_time + 'Z'
+
+    cmr_collections_url = 'https://cmr.earthdata.nasa.gov/search/collections.json'
+    granule_search_url = 'https://cmr.earthdata.nasa.gov/search/granules'
+    base_url = 'https://n5eil02u.ecs.nsidc.org/egi/request'
+
+    # Get json response from CMR collection metadata
+    params = {'short_name': short_name}
+    response = requests.get(cmr_collections_url, params=params)
+    results = json.loads(response.content)
+
+    # Find all instances of 'version_id' in metadata and print most recent version number
+    versions = [el['version_id'] for el in results['feed']['entry']]
+    latest_version = max(versions)
+    capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/{short_name}.{latest_version}.xml'
+
+    # read in geojson file
+    gdf = gpd.read_file(geojson_dir_local + geojson)
+    poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    polygon = ','.join([str(c) for xy in zip(*poly.exterior.coords.xy) for c in xy])
+    polygon
+    search_params = {'short_name': short_name, 'version': latest_version, 'temporal': temporal, 'page_size': 100,
+                     'page_num': 1,'polygon': polygon}
+
+    # query for granules 
+    granules = []
+    headers={'Accept': 'application/json'}
+    while True:
+        response = requests.get(granule_search_url, params=search_params, headers=headers)
+        results = json.loads(response.content)
+
+        if len(results['feed']['entry']) == 0:
+            break # Out of results, so break out of loop
+
+        # Collect results and increment page_num
+        granules.extend(results['feed']['entry'])
+        search_params['page_num'] += 1
+
+    print('Found %i %s version %s granules over %s between %s and %s.' % (len(granules), short_name, latest_version, 
+                                                                          geojson, start_date, end_date))
+
+    granule_list = [g['producer_granule_id'] for g in granules]
+    if geojson_dir_remote is None:
+        geojson_remote = geojson_dir_local + geojson
+    else:
+        geojson_remote = geojson_dir_remote + geojson
+
+    thisdf = pd.DataFrame({'granule': granule_list, 'geojson': geojson_remote})
+    thisdf.to_csv(list_out_name, header=False, index=False)
+    print('Wrote file: %s' % list_out_name)
+    
+
+def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default'): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,
-    subsets it to a given shapefile, and puts it into the specified
+    subsets it to a given geojson file, and puts it into the specified
     output directory as a .h5 file. A NASA earthdata user id (uid), and
     the associated password are required. 
+    (Can also provide a shapefile instead of geojson.)
 
     Parameters
     ----------
@@ -19,8 +155,8 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
         possible values:
             'gt1l' or 'gt1r' or 'gt2l', ... (single gtx)
             ['gt1l', 'gt3r', ...] (list of gtxs)
-    shapefile : string
-        filepath to the shapefile used for spatial subsetting
+    geojson : string
+        filepath to the geojson file used for spatial subsetting
     granule_output_path : string
         folder in which to save the subsetted granule
     uid : string
@@ -35,32 +171,23 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     Examples
     --------
     >>> download_granule_nsidc(granule_id='ATL03_20210715182907_03381203_005_01.h5', 
-                               shapefile='/shapefiles/jakobshavn.shp', 
-                               gtxs='gt1l'
+                               geojson='geojsons/jakobshavn.geojson', 
+                               gtxs='all'
                                granule_output_path='/IS2data', 
                                uid='myuserid', 
                                pwd='mypasword')
     """
     
     import requests
-    import getpass
-    import socket 
     import json
     import zipfile
-    import io
-    import math
     import os
     import shutil
-    import pprint
     import re
-    import time
     import geopandas as gpd
-    import fiona
     from shapely.geometry import Polygon, mapping
     from shapely.geometry.polygon import orient
-    from requests.auth import HTTPBasicAuth
     from xml.etree import ElementTree as ET
-    import sys
     import numpy as np
     
     short_name = 'ATL03'
@@ -69,29 +196,33 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/{short_name}.{version}.xml'
     base_url = 'https://n5eil02u.ecs.nsidc.org/egi/request'
     
-    shapefile_filepath = str(os.getcwd() + shapefile)
+    geojson_filepath = str(os.getcwd() + '/' + geojson)
     
     # set the variables for subsetting
-    vars_sub = ['/ancillary_data/atlas_sdp_gps_epoch',
-                '/orbit_info/rgt',
-                '/orbit_info/cycle_number',
-                '/orbit_info/sc_orient',
-                '/gtx/geolocation/ph_index_beg',
-                '/gtx/geolocation/segment_dist_x',
-                '/gtx/geolocation/segment_length',
-                '/gtx/geophys_corr/dem_h',
-                '/gtx/geophys_corr/geoid',
-                '/gtx/bckgrd_atlas/pce_mframe_cnt',
-                '/gtx/bckgrd_atlas/bckgrd_counts',
-                '/gtx/bckgrd_atlas/bckgrd_int_height',
-                '/gtx/bckgrd_atlas/delta_time',
-                '/gtx/heights/lat_ph',
-                '/gtx/heights/lon_ph',
-                '/gtx/heights/h_ph',
-                '/gtx/heights/dist_ph_along',
-                '/gtx/heights/delta_time',
-                '/gtx/heights/pce_mframe_cnt',
-                '/gtx/heights/quality_ph']
+    if vars_sub == 'default':
+        vars_sub = ['/ancillary_data/atlas_sdp_gps_epoch',
+                    '/orbit_info/rgt',
+                    '/orbit_info/cycle_number',
+                    '/orbit_info/sc_orient',
+                    # '/gtx/geolocation/segment_id',
+                    '/gtx/geolocation/ph_index_beg',
+                    '/gtx/geolocation/segment_dist_x',
+                    '/gtx/geolocation/segment_length',
+                    # '/gtx/geolocation/segment_ph_cnt',
+                    '/gtx/geophys_corr/dem_h',
+                    '/gtx/geophys_corr/geoid',
+                    '/gtx/bckgrd_atlas/pce_mframe_cnt',
+                    '/gtx/bckgrd_atlas/bckgrd_counts',
+                    '/gtx/bckgrd_atlas/bckgrd_int_height',
+                    '/gtx/bckgrd_atlas/delta_time',
+                    '/gtx/heights/lat_ph',
+                    '/gtx/heights/lon_ph',
+                    '/gtx/heights/h_ph',
+                    '/gtx/heights/dist_ph_along',
+                    '/gtx/heights/delta_time',
+                    '/gtx/heights/pce_mframe_cnt',
+                    # '/gtx/heights/signal_conf_ph',
+                    '/gtx/heights/quality_ph']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     
     if gtxs == 'all':
@@ -130,7 +261,7 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
         
     # Use geopandas to read in polygon file as GeoDataFrame object 
     # Note: a KML or geojson, or almost any other vector-based spatial data format could be substituted here.
-    gdf = gpd.read_file(shapefile_filepath)
+    gdf = gpd.read_file(geojson_filepath)
     
     # Simplify polygon for complex shapes in order to pass a reasonable request length to CMR. 
     # The larger the tolerance value, the more simplified the polygon.
@@ -138,14 +269,14 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     # The last point should match the first point to close the polygon.
     poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
 
-    geojson = gpd.GeoSeries(poly).to_json() # Convert to geojson
-    geojson = geojson.replace(' ', '') #remove spaces for API call
+    geojson_data = gpd.GeoSeries(poly).to_json() # Convert to geojson
+    geojson_data = geojson_data.replace(' ', '') #remove spaces for API call
     
     #Format dictionary to polygon coordinate pairs for CMR polygon filtering
     polygon = ','.join([str(c) for xy in zip(*poly.exterior.coords.xy) for c in xy])
     
-    print('\nInput shapefile:', shapefile)
-    print('Simplified polygon coordinates based on shapefile input:', polygon)
+    print('\nInput geojson:', geojson)
+    print('Simplified polygon coordinates based on geojson input:', polygon)
     
     # Create session to store cookie and pass credentials to capabilities url
     session = requests.session()
@@ -169,7 +300,10 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
     def intersection(lst1, lst2):
         lst3 = [value for value in lst1 if value in lst2]
         return lst3
-    var_list_subsetting = intersection(variable_vals,var_list)
+    if vars_sub == 'all':
+        var_list_subsetting = variable_vals
+    else:
+        var_list_subsetting = intersection(variable_vals,var_list)
     
     if len(subagent) < 1 :
         print('No services exist for', short_name, 'version', latest_version)
@@ -179,14 +313,14 @@ def download_granule_nsidc(granule_id, gtxs, shapefile, granule_output_path, uid
         agent = ''
         subdict = subagent[0]
         if subdict['spatialSubsettingShapefile'] == 'true':
-            Boundingshape = geojson
+            Boundingshape = geojson_data
         else:
             Boundingshape = ''
         coverage = ','.join(var_list_subsetting)
         
     page_size = 100
     request_mode = 'stream'
-    page_num = math.ceil(len(granules)/page_size)
+    page_num = int(np.ceil(len(granules)/page_size))
 
     param_dict = {'short_name': short_name, 
                   'producer_granule_id': granule_id,

@@ -145,3 +145,46 @@
 
 	Job terminated of its own accord at 2022-08-23T20:19:16Z with exit-code 0.
 ...
+000 (23093167.000.000) 2022-08-23 16:39:52 Job submitted from host: <192.170.231.218:9618?addrs=192.170.231.218-9618+[2605-9a00-10-200b-e643-4bff-fe9e-1f52]-9618&alias=login05.osgconnect.net&noUDP&sock=schedd_326414_6eb9>
+...
+040 (23093167.000.000) 2022-08-23 16:40:06 Started transferring input files
+	Transferring to host: <192.168.4.65:46205?CCBID=128.104.103.162:9618%3faddrs%3d128.104.103.162-9618%26alias%3dospool-ccb.osg.chtc.io%26noUDP%26sock%3dcollector4#877303%20192.170.236.224:9618%3faddrs%3d192.170.236.224-9618+[fd12-3456-789a-10f2-e861-4af-5cee-be87]-9618%26alias%3d192.170.236.224%26noUDP%26sock%3dcollector2#997402&PrivNet=hawk-a623.cc.lehigh.edu&addrs=192.168.4.65-46205&alias=hawk-a623.cc.lehigh.edu&noUDP>
+...
+040 (23093167.000.000) 2022-08-23 16:40:08 Finished transferring input files
+...
+001 (23093167.000.000) 2022-08-23 16:40:08 Job executing on host: <192.168.4.65:37015?CCBID=128.104.103.162:9618%3faddrs%3d128.104.103.162-9618%26alias%3dospool-ccb.osg.chtc.io%26noUDP%26sock%3dcollector5#870268%20192.170.236.224:9618%3faddrs%3d192.170.236.224-9618+[fd12-3456-789a-10f2-e861-4af-5cee-be87]-9618%26alias%3d192.170.236.224%26noUDP%26sock%3dcollector3#986933&PrivNet=hawk-a623.cc.lehigh.edu&addrs=192.168.4.65-37015&alias=hawk-a623.cc.lehigh.edu&noUDP>
+...
+006 (23093167.000.000) 2022-08-23 16:40:17 Image size of job updated: 1
+	4  -  MemoryUsage of job (MB)
+	3328  -  ResidentSetSize of job (KB)
+...
+006 (23093167.000.000) 2022-08-23 16:40:27 Image size of job updated: 2687660
+	167  -  MemoryUsage of job (MB)
+	170664  -  ResidentSetSize of job (KB)
+...
+040 (23093167.000.000) 2022-08-23 16:40:27 Started transferring output files
+...
+040 (23093167.000.000) 2022-08-23 16:40:27 Finished transferring output files
+...
+005 (23093167.000.000) 2022-08-23 16:40:27 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	5071  -  Run Bytes Sent By Job
+	26679  -  Run Bytes Received By Job
+	5071  -  Total Bytes Sent By Job
+	26679  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :                 1         1 
+	   Disk (KB)            :  1050825  2097152   7604179 
+	   Memory (MB)          :      167     2048      7000 
+
+	Job terminated of its own accord at 2022-08-23T21:40:27Z with exit-code 0.
+...
+009 (23090784.000.000) 2022-08-24 15:14:17 Job was aborted.
+	via condor_rm (by user fliphilipp)
+
+	Job terminated by itself at 2022-08-24T00:27:05Z (using method 0: OF_ITS_OWN_ACCORD).
+...
