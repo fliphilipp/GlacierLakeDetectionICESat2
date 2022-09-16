@@ -10,3 +10,4 @@ misc/test1
 *.out
 zip_testing.zip
 figs/*.jpg
+test_nsidc_osg/outputs/
