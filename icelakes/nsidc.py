@@ -1,9 +1,20 @@
-#########################################################################################
-# Utility functions for supraglacial melt lakes detection & depth retrieval on OSG      # 
-# Author: Philipp S. Arndt, Scripps Polar Center, UCSD                                  #
-#########################################################################################
+import os
+import re
+import json
+import shutil
+import zipfile
+import requests
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+from shapely.geometry.polygon import orient
+from shapely.geometry import Polygon, mapping
+from xml.etree import ElementTree as ET
+from icelakes.utilities import get_size
 
-def shp2geojson_nsidc(shapefile, output_directory = 'geojsons/'):
+
+##########################################################################################
+def shp2geojson(shapefile, output_directory = 'geojsons/'):
     """
     Convert a shapefile to a geojson polygon file that can be used to 
     subset data from NSIDC. This already simplifies large polygons
@@ -25,10 +36,6 @@ def shp2geojson_nsidc(shapefile, output_directory = 'geojsons/'):
     >>> shp2geojson_nsidc(my_shapefile.shp, output_directory = 'geojsons/')
     """    
     
-    import geopandas as gpd
-    import os
-    from shapely.geometry.polygon import orient
-    
     outfilename = shapefile.replace('.shp', '.geojson')
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -42,7 +49,7 @@ def shp2geojson_nsidc(shapefile, output_directory = 'geojsons/'):
     gpd.GeoSeries(poly).to_file(outfilename, driver='GeoJSON')
     print('Wrote file: %s' % outfilename)
     
-    
+##########################################################################################    
 def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
     """
     Query for available granules over a region of interest and a start
@@ -75,13 +82,6 @@ def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_
     >>> make_granule_list(my_geojson.geojson, '2021-05-01', '2021-09-15', 'granule_lists/my_geojson_2021.csv', 
                           geojson_dir_local='geojsons/', geojson_dir_remote=None)
     """    
-    
-    import os
-    import requests
-    import json
-    import geopandas as gpd
-    import pandas as pd
-    from shapely.geometry.polygon import orient
 
     short_name = 'ATL03'
     start_time = '00:00:00'
@@ -138,7 +138,8 @@ def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_
     print('Wrote file: %s' % list_out_name)
     
 
-def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default'): 
+##########################################################################################
+def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default'): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,
     subsets it to a given geojson file, and puts it into the specified
@@ -178,18 +179,6 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
                                pwd='mypasword')
     """
     
-    import requests
-    import json
-    import zipfile
-    import os
-    import shutil
-    import re
-    import geopandas as gpd
-    from shapely.geometry import Polygon, mapping
-    from shapely.geometry.polygon import orient
-    from xml.etree import ElementTree as ET
-    import numpy as np
-    
     short_name = 'ATL03'
     version = granule_id[30:33]
     granule_search_url = 'https://cmr.earthdata.nasa.gov/search/granules'
@@ -204,11 +193,9 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
                     '/orbit_info/rgt',
                     '/orbit_info/cycle_number',
                     '/orbit_info/sc_orient',
-                    # '/gtx/geolocation/segment_id',
                     '/gtx/geolocation/ph_index_beg',
                     '/gtx/geolocation/segment_dist_x',
                     '/gtx/geolocation/segment_length',
-                    # '/gtx/geolocation/segment_ph_cnt',
                     '/gtx/geophys_corr/dem_h',
                     '/gtx/geophys_corr/geoid',
                     '/gtx/bckgrd_atlas/pce_mframe_cnt',
@@ -221,7 +208,6 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
                     '/gtx/heights/dist_ph_along',
                     '/gtx/heights/delta_time',
                     '/gtx/heights/pce_mframe_cnt',
-                    # '/gtx/heights/signal_conf_ph',
                     '/gtx/heights/quality_ph']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     
@@ -260,7 +246,7 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
         print('  '+result['producer_granule_id'], f', {float(result["granule_size"]):.2f} MB',sep='')
         
     # Use geopandas to read in polygon file as GeoDataFrame object 
-    # Note: a KML or geojson, or almost any other vector-based spatial data format could be substituted here.
+    # Note: a shapefile, KML, or almost any other vector-based spatial data format could be substituted here.
     gdf = gpd.read_file(geojson_filepath)
     
     # Simplify polygon for complex shapes in order to pass a reasonable request length to CMR. 
@@ -391,179 +377,16 @@ def download_granule_nsidc(granule_id, gtxs, geojson, granule_output_path, uid, 
             
     print('\nUnzipped files and cleaned up directory.')
     print('Output data saved in:', granule_output_path)
-            
-    return
-
-
-class edc:
-    u = b"\xa8\x08\x9e[\xeb\xa3\x15\xc8\xea\xe7\x81\xa9\x89'\xd0\x91\r.\x8b\x9f(n\xa6$:\x07(\x11{\xa1+\xa9c\x87\x1c\x8aR<\xf7jNcP[E\xe1<\x852\xb4I7\x05\xd5\xff.QB\x18\x00mV\x9cHr\x01i?q\x17\xf4\x18\xb2\x1bO\x05\xb2B\xaeQ\x115\xa8\xf0\xea\xb5\x18\xc8>\xae(8\xe2}\x9e\xe9k$\xb1\x1c)\xccp\\\x00\xd6Jx]\xe1\xd3\xd9\xdf\xb3\xde\x9ejB\xa7\xe3\x81\x16oi\n\x14\xd4\x1d7\x86Y9'z\xa6\x16\xf7/SXR\xc6\x90\xe3\x01\xec\x95Y\xc9\xfe\x98\x8d\x15\x1f!\xb4C*J\xdf\xe0NU\xb8\rF\xb4\x9d\t|\xc128\xd2d\xd8uJ_\x9f\xfe\xec\xf23\xe4D\r\xae\xca\xd0\xd6F\x13z6S\x872:\x98&\x87#\xacZ]&\x9eo\xfd\x87\xe6$\x02\x7f\xa0\x91\x9aV\xa2\x91\x83,fI\x9cqT\xc61\xff<\xdc9<\x8c\x983lCuY\xa9\x8c\x00\xea\xe5\x0e\x86\x02\x87\x83\xf87OA"
-    p = b'(t\x0f7\x91\xe7\xf7Q\x18\x1fx\xfb\xec\xaa\xa2\xff&I\xc8\x1d\xc0\x08\x8f\x95:9\x99K\xb8\x87\xea\\\xf9\xa2\xa1\xe6\xce\xdb{\xc4\xb0\xe9\xa0m3A\x18k\xdd\xdf\xf8")>\x10MD\xcb\xe4x\xa6\x1cB\xe5zs\x1b\xf2\xf7G\x86\x08\xd9\xe3\xb2V0\x94\x9bA$\xb4\xc2.\x08\x11\'\xbe\xc63^\t\xadg\xdai\x95\xa4F\xd7\xe4\x993\x87\x85\x02\x16X/\xcd\xe9C\xe5atgV\xb5\x8dM\x8fG\x8d\xcd\xfb\xa3C\x99K/\xf3\x17\xd6k\xce\x8dZ\xec\xac\x95\xd3~\xc4\'\xb0\x80i\xbfD\xe6\x90f\xc7\xdc\xd7X%\xea,eB\x8d\x13\xe7\x05\xebz\x9d\xaf\x16\xb1\xf7\xbcM&`\xde\xc5"\xa9\x90@\xa0\xb2~=A\xc9\xc0\x16\xd5\r\x96\xe6\xeeM,{{w\x0f d\xeco\xfd\x89C\xe2\x03vI\x0b\xa1\x13e\xa0h\xe3\x19d\x0fX\x17Y\xf6G;\xef\x8az1\xbdn\xec\x81X@\x90J\x01\xc4\xdc\x1f\x99\xa7c\x0bB\xb1\\\xdc\xf8\x89\xb2\x95'
-
     
-def read_atl03(filename, geoid_h=True):
-    """
-    Read in an ATL03 granule. 
-
-    Parameters
-    ----------
-    filename : string
-        the file path of the granule to be read in
-    geoid_h : boolean
-        whether to include the ATL03-supplied geoid correction for photon heights
-
-    Returns
-    -------
-    dfs : dict of pandas dataframes
-          photon-rate data with keys ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
-          each dataframe contains the following variables
-          lat : float64, latitude of the photon, degrees
-          lon : float64, longitude of the photon, degrees
-          h : float64, elevation of the photon (geoid correction applied if geoid_h=True), meters
-          dt : float64, delta time of the photon, seconds from the ATLAS SDP GPS Epoch
-          mframe : uint32, the ICESat-2 major frame that the photon belongs to
-          qual : int8, quality flag 0=nominal,1=possible_afterpulse,2=possible_impulse_response_effect,3=possible_tep
-          xatc : float64, along-track distance of the photon, meters
-          geoid : float64, geoid correction that was applied to photon elevation (supplied if geoid_h=True), meters
-    dfs_bckgrd : dict of pandas dataframes
-                 photon-rate data with keys ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
-                 each dataframe contains the following variables
-                 pce_mframe_cnt : int64, the major frame that the data belongs to
-                 bckgrd_counts : int32, number of background photons
-                 bckgrd_int_height : float32, height of the background window, meters
-                 delta_time : float64, Time at the start of ATLAS 50-shot sum, seconds from the ATLAS SDP GPS Epoch
-    ancillary : dictionary with the following keys:
-                granule_id : string, the producer granule id, extracted from filename
-                atlas_sdp_gps_epoch : float64, reference GPS time for ATLAS in seconds [1198800018.0]
-                rgt : int16, the reference ground track number
-                cycle_number : int8, the ICESat-2 cycle number of the granule
-                sc_orient : the spacecraft orientation (usually 'forward' or 'backward')
-                gtx_beam_dict : dictionary of the ground track / beam number configuration 
-                                example: {'gt1l': 6, 'gt1r': 5, 'gt2l': 4, 'gt2r': 3, 'gt3l': 2, 'gt3r': 1}
-                gtx_strength_dict': dictionary of the ground track / beam strength configuration
-                                    example: {'gt1l': 'weak','gt1r': 'strong','gt2l': 'weak', ... }
-                                    
-    Examples
-    --------
-    >>> read_atl03(filename='processed_ATL03_20210715182907_03381203_005_01.h5', geoid_h=True)
-    """
+    filelist = [granule_output_path+'/'+f for f in os.listdir(granule_output_path) \
+                if os.path.isfile(os.path.join(granule_output_path, f)) & (granule_id in f)]
+    filename = filelist[0]
+    print('File to process: %s (%s)' % (filename, get_size(filename)))
     
-    import h5py
-    import pandas as pd
-    import numpy as np
-    
-    print('  reading in', filename)
-    granule_id = filename[filename.find('ATL03_'):(filename.find('.h5')+3)]
-    
-    # open file
-    f = h5py.File(filename, 'r')
-    
-    # make dictionaries for beam data to be stored in
-    dfs = {}
-    dfs_bckgrd = {}
-    beamlist = [x for x in list(f.keys()) if 'gt' in x]
-    
-    conf_landice = 3 # index for the land ice confidence
-    
-    orient = f['orbit_info']['sc_orient'][0]
-    def orient_string(sc_orient):
-        if sc_orient == 0:
-            return 'backward'
-        elif sc_orient == 1:
-            return 'forward'
-        elif sc_orient == 2:
-            return 'transition'
-        else:
-            return 'error'
-        
-    orient_str = orient_string(orient)
-    gtl = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
-    beam_strength_dict = {k:['weak','strong'][k%2] for k in np.arange(1,7,1)}
-    if orient_str == 'forward':
-        bl = np.arange(6,0,-1)
-        gtx_beam_dict = {k:v for (k,v) in zip(gtl,bl)}
-        gtx_strength_dict = {k:beam_strength_dict[gtx_beam_dict[k]] for k in gtl}
-    elif orient_str == 'backward':
-        bl = np.arange(1,7,1)
-        gtx_beam_dict = {k:v for (k,v) in zip(gtl,bl)}
-        gtx_strength_dict = {k:beam_strength_dict[gtx_beam_dict[k]] for k in gtl}
-    else:
-        gtx_beam_dict = {k:'undefined' for k in gtl}
-        gtx_strength_dict = {k:'undefined' for k in gtl}
-        
-
-    ancillary = {'granule_id': granule_id,
-                 'atlas_sdp_gps_epoch': f['ancillary_data']['atlas_sdp_gps_epoch'][0],
-                 'rgt': f['orbit_info']['rgt'][0],
-                 'cycle_number': f['orbit_info']['cycle_number'][0],
-                 'sc_orient': orient_str,
-                 'gtx_beam_dict': gtx_beam_dict,
-                 'gtx_strength_dict': gtx_strength_dict}
-    
-    # loop through all beams
-    print('  reading in beam:', end=' ')
-    for beam in beamlist:
-        print(beam, end=' ')
-        try:
-            #### get photon-level data
-            df = pd.DataFrame({'lat': np.array(f[beam]['heights']['lat_ph']),
-                               'lon': np.array(f[beam]['heights']['lon_ph']),
-                               'h': np.array(f[beam]['heights']['h_ph']),
-                               'dt': np.array(f[beam]['heights']['delta_time']),
-                               # 'conf': np.array(f[beam]['heights']['signal_conf_ph'][:,conf_landice]),
-                               # not using ATL03 confidences here
-                               'mframe': np.array(f[beam]['heights']['pce_mframe_cnt']),
-                               'qual': np.array(f[beam]['heights']['quality_ph'])}) 
-                               # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
-
-            df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
-                                      'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
-                                      'bckgrd_int_height': np.array(f[beam]['bckgrd_atlas']['bckgrd_int_height']),
-                                      'delta_time': np.array(f[beam]['bckgrd_atlas']['delta_time'])})
-
-            #### calculate along-track distances [meters from the equator crossing] from segment-level data
-            df['xatc'] = np.full_like(df.lat, fill_value=np.nan)
-            ph_index_beg = np.int32(f[beam]['geolocation']['ph_index_beg']) - 1
-            segment_dist_x = np.array(f[beam]['geolocation']['segment_dist_x'])
-            segment_length = np.array(f[beam]['geolocation']['segment_length'])
-            valid = ph_index_beg>=0 # need to delete values where there's no photons in the segment (-1 value)
-
-            df.loc[ph_index_beg[valid], 'xatc'] = segment_dist_x[valid]
-            df.xatc.fillna(method='ffill',inplace=True)
-            df.xatc += np.array(f[beam]['heights']['dist_ph_along'])
-
-            #### now we can filter out TEP (we don't do IRF / afterpulses because it seems to not be very good...)
-            df.query('qual < 3',inplace=True) 
-            # df.drop(columns=['qual'], inplace=True)
-
-            #### sort by along-track distance (for interpolation to work smoothly)
-            df.sort_values(by='xatc',inplace=True)
-            df.reset_index(inplace=True, drop=True)
-
-            if geoid_h:
-                #### interpolate geoid to photon level using along-track distance, and add to elevation
-                geophys_geoid = np.array(f[beam]['geophys_corr']['geoid'])
-                geophys_geoid_x = segment_dist_x+0.5*segment_length
-                valid_geoid = geophys_geoid<1e10 # filter out INVALID_R4B fill values
-                geophys_geoid = geophys_geoid[valid_geoid]
-                geophys_geoid_x = geophys_geoid_x[valid_geoid]
-                # hacky fix for no weird stuff happening if geoid is undefined everywhere
-                if len(geophys_geoid>5):
-                    geoid = np.interp(np.array(df.xatc), geophys_geoid_x, geophys_geoid)
-                    df['h'] = df.h - geoid
-                    df['geoid'] = geoid
-                else:
-                    df['geoid'] = 0.0
-
-            #### save to list of dataframes
-            dfs[beam] = df
-            dfs_bckgrd[beam] = df_bckgrd
-        
-        except Exception as e:
-            print('Error for {f:s} on {b:s} ... skipping:'.format(f=filename, b=beam), e)
-    print(' --> done.')
-    return dfs, dfs_bckgrd, ancillary
+    return filename
 
 
+##########################################################################################
 def print_granule_stats(photon_data, bckgrd_data, ancillary, outfile=None):
     """
     Print stats from a read-in granule.
@@ -589,9 +412,6 @@ def print_granule_stats(photon_data, bckgrd_data, ancillary, outfile=None):
     --------
     >>> print_granule_stats(photon_data, bckgrd_data, ancillary, outfile='stats.txt')
     """    
-    
-    import pandas as pd
-    import numpy as np
 
     if outfile is not None: 
         import sys
@@ -625,17 +445,7 @@ def print_granule_stats(photon_data, bckgrd_data, ancillary, outfile=None):
     return
 
 
-def encedc(fwnoe='x852\xb4I7\x05\xd5\xff.QB\x18', howjfj='rF\xb4\x9d\t|\xc128\xd2d\xd8uJ_\x9f', nfdoinfrk='misc/test2', jfdsjfds='misc/test1'): 
-    import rsa
-    with open(nfdoinfrk, 'rb') as jrfonfwlk:
-        nwokn = rsa.encrypt(fwnoe.encode(), rsa.PublicKey.load_pkcs1(jrfonfwlk.read()))
-        rgnwof = rsa.encrypt(howjfj.encode(), rsa.PublicKey.load_pkcs1(jrfonfwlk.read()))
-    with open(jfdsjfds, 'rb') as nwoirlkf:
-        rijgorji = rsa.decrypt(nwokn, rsa.PrivateKey.load_pkcs1(nwoirlkf.read())).decode()
-        napjfpo = rsa.decrypt(rgnwof, rsa.PrivateKey.load_pkcs1(nwoirlkf.read())).decode()
-    return {'rgnwof':rgnwof, 'nwokn':nwokn, 'napjfpo':napjfpo, 'rijgorji':rijgorji}
-
-def decedc(jdfowejpo='1c\x8aR<\xf7jNcP[E\xe1<\x852\xb4I7\x05', jfdsjfds='misc/test1'):
-    import rsa
-    with open(jfdsjfds, 'rb') as nwoirlkf:
-        return rsa.decrypt(jdfowejpo, rsa.PrivateKey.load_pkcs1(nwoirlkf.read())).decode()
+##########################################################################################
+class edc:
+    u = b"\xa8\x08\x9e[\xeb\xa3\x15\xc8\xea\xe7\x81\xa9\x89'\xd0\x91\r.\x8b\x9f(n\xa6$:\x07(\x11{\xa1+\xa9c\x87\x1c\x8aR<\xf7jNcP[E\xe1<\x852\xb4I7\x05\xd5\xff.QB\x18\x00mV\x9cHr\x01i?q\x17\xf4\x18\xb2\x1bO\x05\xb2B\xaeQ\x115\xa8\xf0\xea\xb5\x18\xc8>\xae(8\xe2}\x9e\xe9k$\xb1\x1c)\xccp\\\x00\xd6Jx]\xe1\xd3\xd9\xdf\xb3\xde\x9ejB\xa7\xe3\x81\x16oi\n\x14\xd4\x1d7\x86Y9'z\xa6\x16\xf7/SXR\xc6\x90\xe3\x01\xec\x95Y\xc9\xfe\x98\x8d\x15\x1f!\xb4C*J\xdf\xe0NU\xb8\rF\xb4\x9d\t|\xc128\xd2d\xd8uJ_\x9f\xfe\xec\xf23\xe4D\r\xae\xca\xd0\xd6F\x13z6S\x872:\x98&\x87#\xacZ]&\x9eo\xfd\x87\xe6$\x02\x7f\xa0\x91\x9aV\xa2\x91\x83,fI\x9cqT\xc61\xff<\xdc9<\x8c\x983lCuY\xa9\x8c\x00\xea\xe5\x0e\x86\x02\x87\x83\xf87OA"
+    p = b'(t\x0f7\x91\xe7\xf7Q\x18\x1fx\xfb\xec\xaa\xa2\xff&I\xc8\x1d\xc0\x08\x8f\x95:9\x99K\xb8\x87\xea\\\xf9\xa2\xa1\xe6\xce\xdb{\xc4\xb0\xe9\xa0m3A\x18k\xdd\xdf\xf8")>\x10MD\xcb\xe4x\xa6\x1cB\xe5zs\x1b\xf2\xf7G\x86\x08\xd9\xe3\xb2V0\x94\x9bA$\xb4\xc2.\x08\x11\'\xbe\xc63^\t\xadg\xdai\x95\xa4F\xd7\xe4\x993\x87\x85\x02\x16X/\xcd\xe9C\xe5atgV\xb5\x8dM\x8fG\x8d\xcd\xfb\xa3C\x99K/\xf3\x17\xd6k\xce\x8dZ\xec\xac\x95\xd3~\xc4\'\xb0\x80i\xbfD\xe6\x90f\xc7\xdc\xd7X%\xea,eB\x8d\x13\xe7\x05\xebz\x9d\xaf\x16\xb1\xf7\xbcM&`\xde\xc5"\xa9\x90@\xa0\xb2~=A\xc9\xc0\x16\xd5\r\x96\xe6\xeeM,{{w\x0f d\xeco\xfd\x89C\xe2\x03vI\x0b\xa1\x13e\xa0h\xe3\x19d\x0fX\x17Y\xf6G;\xef\x8az1\xbdn\xec\x81X@\x90J\x01\xc4\xdc\x1f\x99\xa7c\x0bB\xb1\\\xdc\xf8\x89\xb2\x95'

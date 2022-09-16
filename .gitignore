@@ -8,3 +8,5 @@ misc/test1
 *.log
 *.err
 *.out
+zip_testing.zip
+figs/*.jpg
