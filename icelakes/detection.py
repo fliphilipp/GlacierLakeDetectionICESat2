@@ -199,11 +199,14 @@ def make_mframe_df(df):
 
 ##########################################################################################
 def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=1.0, bin_height_fine=0.02, smoothing_histogram=0.2, buffer=4.0,
-                            width_surf=0.1, width_buff=0.3, rel_dens_upper_thresh=8, rel_dens_lower_thresh=4,
-                            min_phot=100, min_snr_surface=200):
+                            width_surf=0.1, width_buff=0.3, rel_dens_upper_thresh=5, rel_dens_lower_thresh=3,
+                            min_phot=100, min_snr_surface=50):
     
     peak_locs = np.full(len(df_mframe), np.nan, dtype=np.double)
     is_flat = np.full_like(peak_locs, np.nan, dtype=np.bool_)
+    surf_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
+    upper_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
+    lower_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
     
     for i, mframe in enumerate(df_mframe.index):
         
@@ -245,6 +248,10 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=1.0, bin_height_fin
             rel_dens_lower = 1000 if sum_below==0 else signal_rate / (sum_below / width_buff)
             noise_rate = (dfseg.h.count() - sum_peak) / (dfseg.h.max() - dfseg.h.min() - width_surf*2)
             snr_surface = signal_rate / noise_rate
+            
+            surf_snr[i] = snr_surface
+            upper_snr[i] = rel_dens_upper
+            lower_snr[i] = rel_dens_lower
 
             # check for flat surface, if found calculate SNR and look for bottom return
             is_flat_like_lake = (rel_dens_upper > rel_dens_upper_thresh) \
@@ -253,8 +260,14 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=1.0, bin_height_fin
             is_flat[i] = is_flat_like_lake
             
             # print('%3i, %5s, %4i, %4i, %4i' % (i, is_flat[i], snr_surface, rel_dens_lower, rel_dens_upper))
+    
+    df_mframe['peak'] = peak_locs
+    df_mframe['is_flat'] = is_flat
+    df_mframe['snr_surf'] = surf_snr
+    df_mframe['snr_upper'] = upper_snr
+    df_mframe['snr_lower'] = lower_snr
 
-    return peak_locs, is_flat
+    return df_mframe
 
 
 ##########################################################################################
@@ -368,7 +381,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
 
                         # classify as second peak only if prominence is larger 0.2
                         prominence_secondpeak = np.max(peak_props['prominences'])
-                        prominence_threshold = 0.3
+                        prominence_threshold = 0.15
                         if prominence_secondpeak > prominence_threshold:
 
                             idx_2ndreturn = np.argmax(peak_props['prominences'])
@@ -385,11 +398,15 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
             ratio_2nd_returns = n_2nd_returns/n_subsegs
             df_mframe.loc[mframe, 'ratio_2nd_returns'] = ratio_2nd_returns
             quality_secondreturns = np.sum(prominences) / n_subsegs
-
-            min_quality = (0.2 + (ratio_2nd_returns-0.2)*(0.1/0.8))
+            
+            minqual = 0.2
+            minratio = 0.2
+            min_quality = (minqual - (ratio_2nd_returns-minratio)*(minqual/(1-minratio)))
             quality_summary = 0.0
             quality_pass = 'No'
-            if (ratio_2nd_returns >= 0.2) & (quality_secondreturns > min_quality):
+            yspread = np.sum(np.diff(np.array(elev_2ndpeaks)))
+            max_yspread = 50.0 + 75.0*(n_2nd_returns-1)/(n_subsegs-1)
+            if (ratio_2nd_returns >= minratio) & (quality_secondreturns > min_quality) & (yspread < max_yspread):
                 quality_pass = 'Yes'
                 quality_summary = ratio_2nd_returns*(quality_secondreturns-min_quality)/(ratio_2nd_returns-min_quality)
                 df_mframe.loc[mframe, 'lake_qual_pass'] = True
@@ -404,8 +421,10 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
             flatstring = 'Yes' if df_mframe['is_flat'].loc[mframe] else 'No'
 
             if print_results:
-                print('   mframe %03i: h=%7.2fm. flat=%3s. 2nds=%3d%%. qual=%4.2f. pass=%3s.' % \
-                    (mframe%1000, peak_loc2, flatstring, np.round(ratio_2nd_returns*100), quality_summary, quality_pass))
+                print('   mframe %03i: h=%7.2fm. flat=%3s. snrs=%4i,%4i,%4i. 2nds=%3d%%. qual=%4.2f. pass=%3s.' % \
+                    (mframe%1000, peak_loc2, flatstring, df_mframe.loc[mframe,'snr_surf'], 
+                     df_mframe.loc[mframe,'snr_upper'],df_mframe.loc[mframe, 'snr_lower'],
+                     np.round(ratio_2nd_returns*100), quality_summary, quality_pass))
         
         except: 
             print('Something went wrong getting densities and peaks for mframe %i ...' % mframe)
@@ -540,10 +559,9 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
             iteration += 1
         
         # compile dataframe for lakes found
-        dflakes = pd.DataFrame({'mframe_start': start_mframe, 'mframe_end': stop_mframe, 'surf_elev': surf_elevs})
-        
-        # filter out the ones that are only a single major frame long
-        df_extracted_lakes = dflakes[(dflakes.mframe_end-dflakes.mframe_start) > 0].copy()# .reset_index(inplace=True)
+        df_extracted_lakes  = pd.DataFrame({'mframe_start': np.array(start_mframe), 
+                                            'mframe_end': np.array(stop_mframe), 
+                                            'surf_elev': np.array(surf_elevs)})
         
     except: 
         print('Something went wrong getting densities and peaks for mframe %i ...' % mframe)
@@ -565,8 +583,8 @@ def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0
         thiselev = thislake['surf_elev']
 
         # check for extending before
-        extent_before = thislake['mframe_start']
-        check_before = extent_before - 1
+        extent_before = int(thislake['mframe_start'])
+        check_before = int(extent_before - 1)
         left_to_check = n_check
         while left_to_check > 0:
             # print('check!')
@@ -597,11 +615,18 @@ def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0
             check_after += 1
 
         df_extracted_lakes.loc[i, 'mframe_end'] = extent_after
+    
+    # limit to lakes longer than just one major frame
+    longer_than1 = (df_extracted_lakes.mframe_end - df_extracted_lakes.mframe_start) > 0
+    df_extracted_lakes = df_extracted_lakes[longer_than1].copy()
+    df_extracted_lakes.reset_index(inplace=True)
 
     # expand each lake by two major frames
     print(' ')
     df_extracted_lakes['mframe_start'] -= 2
     df_extracted_lakes['mframe_end'] += 2
+    
+    return df_extracted_lakes
     
     
 ##########################################################################################
@@ -624,7 +649,7 @@ def calculate_remaining_densities(df, df_mframe, df_extracted_lakes):
 
 ##########################################################################################
 def plot_found_lakes(df, df_mframe, df_extracted_lakes, ancillary, gtx, polygon, fig_dir='figs/', verbose=False,
-                     min_width=100, min_depth=2.4):
+                     min_width=100, min_depth=1.5):
 
     plt.close('all')
 
@@ -638,9 +663,9 @@ def plot_found_lakes(df, df_mframe, df_extracted_lakes, ancillary, gtx, polygon,
         # subset the dataframes to the current lake extent
         df_lake = df[(df['mframe'] >= extent_start) & (df['mframe'] <= extent_end)]
         df_mframe_lake = df_mframe[(df_mframe.index >= extent_start) & (df_mframe.index <= extent_end)]
-        h_2nds = [v for l in list(df_mframe_lake['h_2nd_returns']) for v in l]
-        xatc_2nds = [v for l in list(df_mframe_lake['xatc_2nd_returns']) for v in l]
-        prom_2nds = [v for l in list(df_mframe_lake['proms_2nd_returns']) for v in l]
+        h_2nds = [v for l in list(df_mframe_lake['h_2nd_returns'])[2:-2] for v in l]
+        xatc_2nds = [v for l in list(df_mframe_lake['xatc_2nd_returns'])[2:-2] for v in l]
+        prom_2nds = [v for l in list(df_mframe_lake['proms_2nd_returns'])[2:-2] for v in l]
 
         # get statistics
         # average mframe quality summary excluding the two mframes for buffer on each side
@@ -676,7 +701,7 @@ def plot_found_lakes(df, df_mframe, df_extracted_lakes, ancillary, gtx, polygon,
                 track=lake_track, mptyp=mptyp, beam_nr=lake_beam_nr)
         
         # plot only if criteria are fulfilled
-        if (lake_max_depth > min_depth) & (lake_segment_length > min_width):
+        if (lake_max_depth > min_depth) & (lake_max_depth < 50.0) & (lake_segment_length > min_width):
             fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
 
             ax.scatter(df_lake.xatc-df_lake.xatc.min(), df_lake.h, s=6, c='k', alpha=0.05, edgecolors='none')
@@ -719,7 +744,7 @@ def plot_found_lakes(df, df_mframe, df_extracted_lakes, ancillary, gtx, polygon,
             dateid = datetime.datetime.fromtimestamp(epoch).strftime("%Y%m%d-%H%M%S")
             granid = ancillary['granule_id'][:-3]
             latid = '%dN'%(int(np.round(lake_lat*1e5))) if lake_lat>=0 else '%dS'%(-int(np.round(lake_lat*1e5)))
-            lonid = '%dE'%(int(np.round(lake_lon*1e5))) if lake_lon>=0 else '%dS'%(-int(np.round(lake_lon*1e5)))
+            lonid = '%dE'%(int(np.round(lake_lon*1e5))) if lake_lon>=0 else '%dW'%(-int(np.round(lake_lon*1e5)))
             figname = fig_dir + 'lake_%s_%s_%s_%s-%s.jpg' % (lake_poly, granid, lake_gtx, latid, lonid)
             fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
             plt.close(fig)
@@ -759,7 +784,7 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
     print('\n-----------------------------------------------------------------------------\n')
     print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
     print('---> finding flat surfaces', end=' ')
-    df_mframe['peak'], df_mframe['is_flat'] = find_flat_lake_surfaces(df_mframe, df)
+    df_mframe = find_flat_lake_surfaces(df_mframe, df)
     print('(%i / %i were flat)' % (df_mframe.is_flat.sum(), df_mframe.is_flat.count()))
     df_selected = df_mframe[df_mframe.is_flat]
     
@@ -780,7 +805,7 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
     prnt(df_lakes)
     
     print('---> checking lake edges and extending lakes if they match')
-    check_lake_surroundings(df_mframe, df_lakes)
+    df_lakes = check_lake_surroundings(df_mframe, df_lakes)
     prnt(df_lakes)
     
     print('---> calculating remaining photon densities')
