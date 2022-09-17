@@ -11,3 +11,4 @@ misc/test1
 zip_testing.zip
 figs/*.jpg
 shapefiles/
+test_nsidc_osg/outputs/

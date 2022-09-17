@@ -27,4 +27,4 @@ print('\nNumber of processed ATL03 granules to read in: ' + str(len(filelist)))
 filename = filelist[0]
     
 photon_data, bckgrd_data, ancillary = read_atl03(filename, geoid_h=True)
-print_granule_stats(photon_data, bckgrd_data, ancillary, outfile='output/stats.txt')
+print_granule_stats(photon_data, bckgrd_data, ancillary, outfile='output/stats-' + args.granule[:36] + '.txt')

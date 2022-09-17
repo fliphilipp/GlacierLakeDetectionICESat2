@@ -11,14 +11,14 @@ max_retries = 5
 transfer_input_files = test1.py, utils.py, misc/test1, misc/test2, $(polygon)
 
 transfer_output_files = output
-transfer_output_remaps  = "output=outputs/$(ClusterID).$(ProcID).$(granule)"
+transfer_output_remaps  = "output=outputs"
 
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 
-log           = logs/job.$(ClusterID).$(ProcID).$(granule).log
-error         = errs/job.$(ClusterID).$(ProcID).$(granule).err
-output        = outs/job.$(ClusterID).$(ProcID).$(granule).out
+log           = logs/job.$(granule).$(ClusterID).$(ProcID).log
+error         = errs/job.$(granule).$(ClusterID).$(ProcID).err
+output        = outs/job.$(granule).$(ClusterID).$(ProcID).out
 
 request_cpus    = 1
 request_memory  = 2GB
