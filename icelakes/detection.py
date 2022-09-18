@@ -202,6 +202,7 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=1.0, bin_height_fin
                             width_surf=0.1, width_buff=0.3, rel_dens_upper_thresh=5, rel_dens_lower_thresh=3,
                             min_phot=100, min_snr_surface=50):
     
+    # initialize arrays for major-frame-level photon stats
     peak_locs = np.full(len(df_mframe), np.nan, dtype=np.double)
     is_flat = np.full_like(peak_locs, np.nan, dtype=np.bool_)
     surf_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
@@ -271,7 +272,7 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=1.0, bin_height_fin
 
 
 ##########################################################################################
-def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10, dh_signal=0.2, n_subsegs=7,
+def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.2, n_subsegs=10,
                                 bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
     
     # somehow got duplicate indices (mframe values in index) in here
@@ -279,6 +280,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
     # below is a temporary fix ---> check out more what's wrong here
     df_mframe_selected = df_selected.copy()
     df_mframe_selected.drop_duplicates(subset=['xatc_min','xatc_max'], keep='first', inplace=True)
+    df['specular'] = False
     
     for mframe in df_mframe_selected.index:
         
@@ -346,10 +348,50 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
 
                 subsegend = subsegstart + subsegwidth
                 selector_subseg = ((dfseg.xatc > subsegstart) & (dfseg.xatc < subsegend))
-                dfsubseg = dfseg[selector_subseg]
+                dfsubseg = dfseg[selector_subseg].copy()
 
                 # avoid looking for peaks when there's no / very little data
                 if len(dfsubseg > 20):
+                    
+                    beam_strength = ancillary['gtx_strength_dict'][gtx]
+                    if beam_strength == 'weak':
+                        # _____________________________________________________________
+                        # check for specular returns at 0.94 & 1.46 m below main peak (roughly???)
+                        bin_h_spec = 0.01
+                        smoothing_spec = 0.15
+                        spec1 = 0.94
+                        spec2 = 1.46
+                        spec_tol = 0.1
+                        rm_h = 0.1
+                        bins_spec = np.arange(start=peak_loc2-10.0, stop=peak_loc2+5.0, step=bin_h_spec)
+                        mid_spec = bins_spec[:-1] + 0.5 * bin_h_spec
+                        hist_spec = np.histogram(dfsubseg.h, bins=bins_spec)
+                        window_size = int(smoothing_spec/bin_h_spec)
+                        hist_vals = hist_spec[0] / np.max(hist_spec[0])
+                        hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window_size,center=True,min_periods=1).mean())
+                        hist_vals_smoothed /= np.max(hist_vals_smoothed)
+                        peaks, peak_props = find_peaks(hist_vals_smoothed, height=0.1, distance=int(0.4/bin_h_spec), prominence=0.1)
+                        if len(peaks) > 2:
+                            peak_hs = mid_spec[peaks]
+                            peak_proms = peak_props['prominences']
+                            idx_3highest = np.flip(np.argsort(peak_proms))[:3]
+                            prms = peak_proms[idx_3highest]
+                            pks_h = np.sort(peak_hs[idx_3highest])
+                            has_main_peak = np.abs(pks_h[2]-peak_loc2) < 0.3
+                            has_1st_specular_return = np.abs(pks_h[2]-pks_h[1]-spec1) < spec_tol
+                            has_2nd_specular_return = np.abs(pks_h[2]-pks_h[0]-spec2) < spec_tol
+                            if has_main_peak & has_1st_specular_return & has_2nd_specular_return:
+                                # print('specular return. pk-uppr=%5.2f, 1st=%5.2f, 2nd%5.2f, proms: %.2f, %.2f, %.2f' % \
+                                #       (np.abs(pks_h[2]-peak_loc2), pks_h[2]-pks_h[1], pks_h[2]-pks_h[0], 
+                                #        prms[0], prms[1], prms[2]))
+                                correct_specular = True
+                                is_upper_spec = (dfsubseg.h < (pks_h[1] + rm_h)) & (dfsubseg.h > (pks_h[1] - rm_h))
+                                is_lower_spec = (dfsubseg.h < (pks_h[0] + rm_h)) & (dfsubseg.h > (pks_h[0] - rm_h))
+                                is_specular = is_upper_spec | is_lower_spec
+                                dfsubseg['specular'] = is_specular
+                                dfsubseg.loc[dfsubseg['specular'], 'snr'] = 0.0
+                                dfseg.loc[selector_subseg,'specular'] = is_specular
+                        #______________________________________________________________
 
                     # get the median of the snr values in each bin
                     bins_subseg_snr = np.arange(start=np.max((dfsubseg.h.min(),peak_loc2-70)), stop=peak_loc2+2*buffer, step=bin_height_snr)
@@ -373,40 +415,63 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
 
                     # combine histogram and snr values to find peaks
                     snr_hist_smoothed = subhist_smoothed * snr_vals_smoothed
-                    peaks, peak_props = find_peaks(snr_hist_smoothed, height=0.1, distance=int(0.5/bin_height_snr), prominence=0.1)
-
+                    peaks, peak_props = find_peaks(snr_hist_smoothed, height=0.05, distance=int(0.5/bin_height_snr), prominence=0.05)
+                    
                     if len(peaks) >= 2: 
-                        idx_surfpeak = np.argmin(peak_loc2 - mid_subseg_snr[peaks])
-                        peak_props['prominences'][idx_surfpeak] = 0
+                        has_surf_peak = np.min(np.abs(peak_loc2 - mid_subseg_snr[peaks])) < 0.4
+                        if has_surf_peak: 
+                            idx_surfpeak = np.argmin(np.abs(peak_loc2 - mid_subseg_snr[peaks]))
+                            peak_props['prominences'][idx_surfpeak] = 0
 
-                        # classify as second peak only if prominence is larger 0.2
-                        prominence_secondpeak = np.max(peak_props['prominences'])
-                        prominence_threshold = 0.15
-                        if prominence_secondpeak > prominence_threshold:
+                            # classify as second peak only if prominence is larger than $(prominence_threshold)
+                            prominence_secondpeak = np.max(peak_props['prominences'])
+                            prominence_threshold = 0.1
+                            if prominence_secondpeak > prominence_threshold:
 
-                            idx_2ndreturn = np.argmax(peak_props['prominences'])
-                            secondpeak_h = mid_subseg_snr[peaks[idx_2ndreturn]]
+                                idx_2ndreturn = np.argmax(peak_props['prominences'])
+                                secondpeak_h = mid_subseg_snr[peaks[idx_2ndreturn]]
 
-                            # classify as second peak only if elevation is 1m lower than main peak (surface) and higher than 50m below surface
-                            if (secondpeak_h < (peak_loc2-1.0)) & (secondpeak_h > (peak_loc2-50.0)):
-                                secondpeak_xtac = subsegstart + subsegwidth/2
-                                n_2nd_returns += 1
-                                prominences.append(prominence_secondpeak)
-                                elev_2ndpeaks.append(secondpeak_h)
-                                subpeaks_xatc.append(secondpeak_xtac)
+                                # classify as second peak only if elevation is 1m lower than main peak (surface) and higher than 50m below surface
+                                if (secondpeak_h < (peak_loc2-1.0)) & (secondpeak_h > (peak_loc2-50.0)):
+                                    secondpeak_xtac = subsegstart + subsegwidth/2
+                                    n_2nd_returns += 1
+                                    prominences.append(prominence_secondpeak)
+                                    elev_2ndpeaks.append(secondpeak_h)
+                                    subpeaks_xatc.append(secondpeak_xtac)
 
+            df.loc[selector_segment,'specular'] = dfseg['specular']
+            
+            # keep only second returns that are 10 m or closer to the next one on either side 
+            # (helps filter out random noise, but might in rare cases suppress a signal)
+            maxdiff = 5.0
+            if len(elev_2ndpeaks) > 0:
+                if len(elev_2ndpeaks) > 2: # if there's at least 3 second returns, compare elevations and remove two-sided outliers
+                    diffs = np.abs(np.diff(np.array(elev_2ndpeaks)))
+                    right_diffs = np.array(list(diffs) + [np.abs(elev_2ndpeaks[-3]-elev_2ndpeaks[-1])])
+                    left_diffs = np.array([np.abs(elev_2ndpeaks[2]-elev_2ndpeaks[0])] + list(diffs))
+                    to_keep = (right_diffs < maxdiff) | (left_diffs < maxdiff)
+
+                # just consider elevation difference if there's only two, remove if only one (shouldn't be the case...)
+                elif len(elev_2ndpeaks) == 2:
+                    to_keep = [True, True] if np.abs(elev_2ndpeaks[1] - elev_2ndpeaks[0]) < maxdiff else [False, False]
+                elif len(elev_2ndpeaks) == 1:
+                    to_keep = [False]
+
+                n_2nd_returns = np.sum(to_keep)
+                elev_2ndpeaks = np.array(elev_2ndpeaks)[to_keep]
+                prominences = np.array(prominences)[to_keep]
+                subpeaks_xatc = np.array(subpeaks_xatc)[to_keep]
+            
+            # get the second return qualities
+            minqual = 0.25
+            minratio = 0.25
             ratio_2nd_returns = n_2nd_returns/n_subsegs
             df_mframe.loc[mframe, 'ratio_2nd_returns'] = ratio_2nd_returns
             quality_secondreturns = np.sum(prominences) / n_subsegs
-            
-            minqual = 0.2
-            minratio = 0.2
             min_quality = (minqual - (ratio_2nd_returns-minratio)*(minqual/(1-minratio)))
             quality_summary = 0.0
             quality_pass = 'No'
-            yspread = np.sum(np.diff(np.array(elev_2ndpeaks)))
-            max_yspread = 50.0 + 75.0*(n_2nd_returns-1)/(n_subsegs-1)
-            if (ratio_2nd_returns >= minratio) & (quality_secondreturns > min_quality) & (yspread < max_yspread):
+            if (ratio_2nd_returns >= minratio) & (quality_secondreturns >= min_quality): #& (yspread < max_yspread):
                 quality_pass = 'Yes'
                 quality_summary = ratio_2nd_returns*(quality_secondreturns-min_quality)/(ratio_2nd_returns-min_quality)
                 df_mframe.loc[mframe, 'lake_qual_pass'] = True
@@ -425,30 +490,14 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, aspect=30, K_phot=10
                     (mframe%1000, peak_loc2, flatstring, df_mframe.loc[mframe,'snr_surf'], 
                      df_mframe.loc[mframe,'snr_upper'],df_mframe.loc[mframe, 'snr_lower'],
                      np.round(ratio_2nd_returns*100), quality_summary, quality_pass))
+            
+            # adjust SNR values for specular returns
+            df.loc[df['specular'], 'snr'] = 0.0
         
         except: 
             print('Something went wrong getting densities and peaks for mframe %i ...' % mframe)
             traceback.print_exc()
-
             
-##########################################################################################
-# check for densities and possible second returns two mframes around where passing quality lakes were detected
-def check_additional_segments(df, df_mframe, print_results=False):
-    num_additional = 1
-    count = 0
-    while (num_additional > 0) & (count<20):
-        count+=1
-        selected = df_mframe[df_mframe['lake_qual_pass']].index 
-        lst1 = np.unique(list(selected-2) + list(selected-1) + list(selected+1) + list(selected+2))
-        lst2 = df_mframe.index
-        inter = list(set(lst1) & set(lst2))
-        df_include_surrounding = df_mframe.loc[inter]
-        # df_include_surrounding = df_mframe.loc[np.unique(list(selected-2) + list(selected-1) + list(selected+1) + list(selected+2))]
-        df_additional = df_include_surrounding[~df_include_surrounding['has_densities']]
-        num_additional = len(df_additional)
-        if num_additional > 0:
-            get_densities_and_2nd_peaks(df, df_mframe, df_additional, print_results=print_results)
-
             
 ##########################################################################################
 # merge detected lake segments iteratively
@@ -467,7 +516,7 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
         any_merges = True
         iteration = 0
 
-        # keep going until there is no change
+        # keep going until there is no change (i.e. no more segments can be merged further)
         while any_merges:
 
             print('   --> iteration %3d, number of lakes: %4d' % (iteration, n_lakes))
@@ -479,9 +528,12 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
             stop_mframe = []
             surf_elevs = []
             any_merges = False
-
+            
+            # first, check non-overlapping pairs of segments: {0,1}, {2,3}, {4,5} ...
+            # if n_lakes is uneven, this ignores the very last one
             for i in range(0,n_lakes-1,2):
-
+                
+                # merge lakes if they are close-by (in terms of mframe distance), and if elevations are similar
                 is_closeby = ((start_mframe_old[i + 1] - stop_mframe_old[i]) <= max_dist_mframes)
                 is_at_same_elevation = (np.abs(surf_elevs_old[i + 1] - surf_elevs_old[i]) < max_dist_elev)
 
@@ -507,23 +559,30 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
                     stop_mframe += stop_mframe_old[i:i+2]
                     surf_elevs += surf_elevs_old[i:i+2]
                     if debug: print('--> keep separate')
-
+            
+            # if n_lakes is uneven, we don't consider the very last lake for merging. so we need to keep it
             if n_lakes%2 == 1:
                 start_mframe.append(start_mframe_old[-1])
                 stop_mframe.append(stop_mframe_old[-1])
                 surf_elevs.append(surf_elevs_old[-1])
 
-            # try a second time, now starting at index 1
+            # if no success merging any lakes, now start comparing pairs with one index offset 
+            # i.e.: compare non-overlapping pairs of segments : {1,2}, {3,4}, {5,6} ...
             if not any_merges:
                 start_mframe = []
                 stop_mframe = []
                 surf_elevs = []
+                
+                # need to add lake 0, because we're not considering it for any merging
                 start_mframe.append(start_mframe_old[0])
                 stop_mframe.append(stop_mframe_old[0])
                 surf_elevs.append(surf_elevs_old[0])
-
+                
+                # compare non-overlapping pairs of segments : {1,2}, {3,4}, {5,6} ...
+                # this does not compare lake 0 to any others, if n_lakes is even it also ignores the very last one
                 for i in range(1,n_lakes-1,2):
-
+                    
+                    # merge lakes if they are close-by (in terms of mframe distance), and if elevations are similar
                     is_closeby = ((start_mframe_old[i + 1] - stop_mframe_old[i]) <= max_dist_mframes)
                     is_at_same_elevation = (np.abs(surf_elevs_old[i + 1] - surf_elevs_old[i]) < max_dist_elev)
 
@@ -549,7 +608,8 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
                         stop_mframe += stop_mframe_old[i:i+2]
                         surf_elevs += surf_elevs_old[i:i+2]
                         if debug: print('--> keep separate')
-
+                            
+                # if n_lakes is even, we don't consider the very last lake for merging. so we need to keep it
                 if n_lakes%2 == 0:
                     start_mframe.append(start_mframe_old[-1])
                     stop_mframe.append(stop_mframe_old[-1])
@@ -558,7 +618,7 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
             n_lakes = len(surf_elevs)
             iteration += 1
         
-        # compile dataframe for lakes found
+        # compile dataframe for lakes found 
         df_extracted_lakes  = pd.DataFrame({'mframe_start': np.array(start_mframe), 
                                             'mframe_end': np.array(stop_mframe), 
                                             'surf_elev': np.array(surf_elevs)})
@@ -572,65 +632,86 @@ def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress
 
 
 ##########################################################################################
-# check surroundings around lakes to extend them if needed
+# check surroundings around lakes to extend them if needed (based on matching peak in surface elevation)
 def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0.2): 
     
     print('extending lake', end=' ')
     for i in range(len(df_extracted_lakes)):
-    
-        print(' %i:'%i, end='')
-        thislake = df_extracted_lakes.iloc[i]
-        thiselev = thislake['surf_elev']
+        try:
+            print(' %i:'%i, end='')
+            thislake = df_extracted_lakes.iloc[i]
+            thiselev = thislake['surf_elev']
 
-        # check for extending before
-        extent_before = int(thislake['mframe_start'])
-        check_before = int(extent_before - 1)
-        left_to_check = n_check
-        while left_to_check > 0:
-            # print('check!')
-            if np.abs(df_mframe.loc[check_before, 'peak'] - thiselev) < elev_tol:
-                extent_before = check_before
-                left_to_check = n_check
-                print('<',end='')
-            else:
-                left_to_check -= 1
+            # check for extending before
+            extent_before = int(thislake['mframe_start'])
+            check_before = int(extent_before - 1)
+            left_to_check = n_check
+            while (left_to_check > 0) & (check_before in df_mframe.index):
+                
+                # if the peak of the adjacent major frame in within the tolerance threshold
+                if np.abs(df_mframe.loc[int(check_before), 'peak'] - thiselev) <= elev_tol:
+                    extent_before = check_before # add this major frame to the lake
+                    left_to_check = n_check # reset the number of segments left to check back to the starting value
+                    print('<',end='')
+                else:
+                    left_to_check -= 1
+                check_before -= 1 # check the next major frame before (lower value) in the next iteration
+            
+            # set the starting value of the lake to the lowest number value that was found belonging to the lake
+            df_extracted_lakes.loc[i, 'mframe_start'] = extent_before
 
-            check_before -= 1
-
-        df_extracted_lakes.loc[i, 'mframe_start'] = extent_before
-
-        # check for extending after
-        extent_after = thislake['mframe_end']
-        check_after = extent_after + 1
-        left_to_check = n_check
-        while left_to_check > 0:
-            # print('check!')
-            if np.abs(df_mframe['peak'].loc[check_after] - thiselev) < elev_tol:
-                extent_after = check_after
-                left_to_check = n_check
-                print('>',end='')
-            else:
-                left_to_check -= 1
-
-            check_after += 1
-
-        df_extracted_lakes.loc[i, 'mframe_end'] = extent_after
-    
+            # check for extending after
+            extent_after = int(thislake['mframe_end'])
+            check_after = int(extent_after + 1)
+            left_to_check = n_check
+            while (left_to_check > 0) & (check_after in df_mframe.index):
+                
+                # if the peak of the adjacent major frame in within the tolerance threshold
+                if np.abs(df_mframe.loc[int(check_after), 'peak'] - thiselev) < elev_tol:
+                    extent_after = check_after # add this major frame to the lake
+                    left_to_check = n_check # reset the number of segments left to check back to the starting value
+                    print('>',end='')
+                else:
+                    left_to_check -= 1
+                check_after += 1 # check the next major frame after (higher value) in the next iteration
+            
+            # set the end value of the lake to the highest number value that was found belonging to the lake
+            df_extracted_lakes.loc[i, 'mframe_end'] = extent_after
+            
+        except:
+            print('Something went wrong extending this lake %i ...' % i)
+            traceback.print_exc()
+            
     # limit to lakes longer than just one major frame
     longer_than1 = (df_extracted_lakes.mframe_end - df_extracted_lakes.mframe_start) > 0
     df_extracted_lakes = df_extracted_lakes[longer_than1].copy()
     df_extracted_lakes.reset_index(inplace=True)
 
-    # expand each lake by two major frames
+    # expand each lake by two major frames (if these major frames exist)
     print(' ')
-    df_extracted_lakes['mframe_start'] -= 2
-    df_extracted_lakes['mframe_end'] += 2
+    istart = df_extracted_lakes.columns.get_loc('mframe_start')
+    iend = df_extracted_lakes.columns.get_loc('mframe_end')
+    
+    for i in range(len(df_extracted_lakes)):
+        thislake = df_extracted_lakes.iloc[i]
+        
+        # expand by two mframes to the left (if these mframes exist in data set)
+        if int(thislake.mframe_start-2) in df_mframe.index:
+            df_extracted_lakes.iloc[i, istart] -= 2
+        elif int(thislake.mframe_start-1) in df_mframe.index:
+            df_extracted_lakes.iloc[i, istart] -= 1
+        
+        # expand by two mframes to the right (if these mframes exist in data set)
+        if int(thislake.mframe_end+2) in df_mframe.index:
+            df_extracted_lakes.iloc[i, iend] += 2
+        elif int(thislake.mframe_end+1) in df_mframe.index:
+            df_extracted_lakes.iloc[i, iend] += 1
     
     return df_extracted_lakes
     
     
 ##########################################################################################
-def calculate_remaining_densities(df, df_mframe, df_extracted_lakes):
+def calculate_remaining_densities(df, df_mframe, df_extracted_lakes, gtx, ancillary):
     
     dfs_to_calculate_densities = []
     for i in range(len(df_extracted_lakes)):
@@ -644,119 +725,7 @@ def calculate_remaining_densities(df, df_mframe, df_extracted_lakes):
     df_to_calculate_densities = pd.concat(dfs_to_calculate_densities)
     df_to_calculate_densities = df_to_calculate_densities[~df_to_calculate_densities['has_densities']]
 
-    get_densities_and_2nd_peaks(df, df_mframe, df_to_calculate_densities, print_results=False)
-    
-
-##########################################################################################
-def plot_found_lakes(df, df_mframe, df_extracted_lakes, ancillary, gtx, polygon, fig_dir='figs/', verbose=False,
-                     min_width=100, min_depth=1.5):
-
-    plt.close('all')
-
-    for i in range(len(df_extracted_lakes)):
-        
-        thislake = df_extracted_lakes.iloc[i]
-        thiselev = thislake['surf_elev']
-        extent_start = thislake['mframe_start']
-        extent_end = thislake['mframe_end']
-
-        # subset the dataframes to the current lake extent
-        df_lake = df[(df['mframe'] >= extent_start) & (df['mframe'] <= extent_end)]
-        df_mframe_lake = df_mframe[(df_mframe.index >= extent_start) & (df_mframe.index <= extent_end)]
-        h_2nds = [v for l in list(df_mframe_lake['h_2nd_returns'])[2:-2] for v in l]
-        xatc_2nds = [v for l in list(df_mframe_lake['xatc_2nd_returns'])[2:-2] for v in l]
-        prom_2nds = [v for l in list(df_mframe_lake['proms_2nd_returns'])[2:-2] for v in l]
-
-        # get statistics
-        # average mframe quality summary excluding the two mframes for buffer on each side
-        lake_poly = polygon[polygon.rfind('/')+1 : polygon.find('.geojson')]
-        lake_quality = np.sum(df_mframe_lake['quality_summary']) / (len(df_mframe_lake) - 4)
-        lake_time = convert_time_to_string(df_mframe_lake['dt'].mean())
-        lake_lat = df_mframe_lake['lat'].mean()
-        lake_lat_min = df_mframe_lake['lat'].min()
-        lake_lat_max = df_mframe_lake['lat'].max()
-        lake_lat_str = '%.5f°N'%(lake_lat) if lake_lat>=0 else '%.5f°S'%(-lake_lat)
-        lake_lon = df_mframe_lake['lon'].mean()
-        lake_lon_min = df_mframe_lake['lon'].min()
-        lake_lon_max = df_mframe_lake['lon'].max()
-        lake_lon_str = '%.5f°E'%(lake_lon) if lake_lon>=0 else '%.5f°W'%(-lake_lon)
-        lake_gtx = gtx
-        lake_track = ancillary['rgt']
-        lake_cycle = ancillary['cycle_number']
-        lake_beam_strength = ancillary['gtx_strength_dict'][lake_gtx]
-        lake_beam_nr = ancillary['gtx_beam_dict'][lake_gtx]
-        lake_minh = np.min((df_mframe_lake['peak'].min(), np.min(h_2nds)))
-        h_range = thiselev - lake_minh
-        lake_max_depth = thiselev - np.min(h_2nds)
-        lake_segment_length = np.max(xatc_2nds) - np.min(xatc_2nds)
-        lake_maxh = np.min((df_mframe_lake['peak'].max(), thiselev+5*h_range))
-        buffer_top = np.max((0.2*h_range, 1.0))
-        buffer_bottom = np.max((0.3*h_range, 2.0))
-        lake_minh_plot = lake_minh - buffer_bottom
-        lake_maxh_plot = lake_maxh + buffer_top
-        mptyp = 'arctic' if lake_lat>=0 else 'antarctic'
-        lake_oa_url = 'https://openaltimetry.org/data/icesat2/elevation?product=ATL03&zoom_level=7&tab=photon&'
-        lake_oa_url += 'date={date}&minx={minx}&miny={miny}&maxx={maxx}&maxy={maxy}&tracks={track}&mapType={mptyp}&beams={beam_nr}'.format(
-                date=lake_time[:10], minx=lake_lon_min, miny=lake_lat_min, maxx=lake_lon_max, maxy=lake_lat_max,
-                track=lake_track, mptyp=mptyp, beam_nr=lake_beam_nr)
-        
-        # plot only if criteria are fulfilled
-        if (lake_max_depth > min_depth) & (lake_max_depth < 50.0) & (lake_segment_length > min_width):
-            fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
-
-            ax.scatter(df_lake.xatc-df_lake.xatc.min(), df_lake.h, s=6, c='k', alpha=0.05, edgecolors='none')
-            scatt = ax.scatter(df_lake.xatc-df_lake.xatc.min(), df_lake.h, s=3, c=df_lake.snr, alpha=1, edgecolors='none',
-                               cmap=cmc.lajolla,vmin=0,vmax=1)
-
-            # plot surface elevation
-            xmin, xmax = ax.get_xlim()
-            ax.plot([xmin, xmax], [thiselev, thiselev], 'g-', lw=0.5)
-
-            # plot mframe bounds
-            ymin, ymax = ax.get_ylim()
-            mframe_bounds_xatc = list(df_mframe_lake['xatc_min']) + [df_mframe_lake['xatc_max'].iloc[-1]]
-            for xmframe in mframe_bounds_xatc:
-                ax.plot([xmframe-df_lake.xatc.min(), xmframe-df_lake.xatc.min()], [ymin, ymax], 'k-', lw=0.5)
-
-            dfpass = df_mframe_lake[df_mframe_lake['lake_qual_pass']]
-            dfnopass = df_mframe_lake[~df_mframe_lake['lake_qual_pass']]
-            ax.plot(dfpass.xatc-df_lake.xatc.min(), dfpass.peak, marker='o', mfc='g', mec='g', linestyle = 'None', ms=5)
-            ax.plot(dfnopass.xatc-df_lake.xatc.min(), dfnopass.peak, marker='o', mfc='none', mec='r', linestyle = 'None', ms=3)
-
-            for j, prom in enumerate(prom_2nds):
-                ax.plot(xatc_2nds[j]-df_lake.xatc.min(), h_2nds[j], marker='o', mfc='none', mec='b', linestyle = 'None', ms=prom*4)
-
-            divider = make_axes_locatable(ax)
-            cax = divider.append_axes('right', size='4%', pad=0.05)
-            fig.colorbar(scatt, cax=cax, orientation='vertical')
-
-            ax.set_ylim((lake_minh_plot, lake_maxh_plot))
-            ax.set_xlim((0.0, df_mframe_lake['xatc_max'].iloc[-1] - df_lake.xatc.min()))
-
-            ax.set_title('Lake at (%s, %s) on %s\nICESat-2 track %d %s (%s), cycle %d [lake quality: %.2f]' % \
-                         (lake_lat_str, lake_lon_str, lake_time, lake_track, lake_gtx,lake_beam_strength, lake_cycle, lake_quality))
-            ax.set_ylabel('elevation above geoid [m]')
-            ax.set_xlabel('along-track distance [m]')
-
-            # save figure
-            if not os.path.exists(fig_dir): os.makedirs(fig_dir)
-            epoch = df_mframe_lake['dt'].mean() + datetime.datetime.timestamp(datetime.datetime(2018,1,1))
-            dateid = datetime.datetime.fromtimestamp(epoch).strftime("%Y%m%d-%H%M%S")
-            granid = ancillary['granule_id'][:-3]
-            latid = '%dN'%(int(np.round(lake_lat*1e5))) if lake_lat>=0 else '%dS'%(-int(np.round(lake_lat*1e5)))
-            lonid = '%dE'%(int(np.round(lake_lon*1e5))) if lake_lon>=0 else '%dW'%(-int(np.round(lake_lon*1e5)))
-            figname = fig_dir + 'lake_%s_%s_%s_%s-%s.jpg' % (lake_poly, granid, lake_gtx, latid, lonid)
-            fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
-            plt.close(fig)
-        
-        if verbose:
-            print('\nLAKE %i:' % i)
-            print('    - %s' % lake_time)
-            print('    - %s, %s' % (lake_lat_str, lake_lon_str))
-            print('    - segment length: %.1f km' % (lake_segment_length/1000))
-            print('    - max depth: %.1f m' % lake_max_depth)
-            print('    - quality: %.2f' % lake_quality)
-            print('    - quick look: %s' % lake_oa_url)
+    get_densities_and_2nd_peaks(df, df_mframe, df_to_calculate_densities, gtx, ancillary, print_results=False)
             
             
 ##########################################################################################
@@ -790,18 +759,13 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
     
     # calculate densities and find second peaks (where surface is flat)
     print('---> calculating densities and looking for second peaks')
-    get_densities_and_2nd_peaks(df, df_mframe, df_selected, print_results=verbose)
-    print('(%i / %i pass lake quality test)' % (df_mframe.lake_qual_pass.sum(), df_mframe.lake_qual_pass.count()))
-    
-    # calculate densities and find second peaks (two major frames around where passing quality lakes were detected)
-    print('---> calculating densities for surrounding major frames')
-    check_additional_segments(df, df_mframe, print_results=verbose)
+    get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, print_results=verbose)
     print('(%i / %i pass lake quality test)' % (df_mframe.lake_qual_pass.sum(), df_mframe.lake_qual_pass.count()))
     
     print('---> merging lake segments iteratively')
     df_lakes = merge_lakes(df_mframe, print_progress=verbose, debug=verbose)
     if df_lakes is None:
-        return
+        return df_lakes, df_mframe, df
     prnt(df_lakes)
     
     print('---> checking lake edges and extending lakes if they match')
@@ -809,9 +773,86 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
     prnt(df_lakes)
     
     print('---> calculating remaining photon densities')
-    calculate_remaining_densities(df, df_mframe, df_lakes)
+    calculate_remaining_densities(df, df_mframe, df_lakes, gtx, ancillary)
     
-    print('---> making plots of lakes found')
-    plot_found_lakes(df, df_mframe, df_lakes, ancillary, gtx, polygon, fig_dir='figs/', verbose=verbose)
+    # print('---> making plots of lakes found')
+    # plot_found_lakes(df, df_mframe, df_lakes, ancillary, gtx, polygon, fig_dir='figs/', verbose=verbose)
     
-    return df_lakes, df_mframe, df
+    thelakes = []
+    if df_lakes is not None:
+        for i in range(len(df_lakes)):
+            lakedata = df_lakes.iloc[i]
+            thislake = melt_lake(lakedata.mframe_start, lakedata.mframe_end, lakedata.surf_elev)
+            thislake.add_data(df, df_mframe, gtx, ancillary, polygon)
+            thelakes.append(thislake)
+    
+    
+    return thelakes
+
+
+##########################################################################################
+class melt_lake:
+    def __init__(self, mframe_start, mframe_end, main_peak):
+        self.mframe_start = int(mframe_start)
+        self.mframe_end = int(mframe_end)
+        self.main_peak = main_peak
+
+    
+    #-------------------------------------------------------------------------------------
+    def add_data(self, df, df_mframe, gtx, ancillary, polygon):
+        
+        # useful metadata
+        self.granule_id = ancillary['granule_id']
+        self.rgt = ancillary['rgt']
+        self.gtx = gtx
+        self.polygon_filename = polygon
+        self.polygon_name = polygon[polygon.rfind('/')+1 : polygon.find('.geojson')]
+        self.beam_number = ancillary['gtx_beam_dict'][self.gtx]
+        self.beam_strength = ancillary['gtx_strength_dict'][self.gtx]
+        self.cycle_number = ancillary['cycle_number']
+        self.sc_orient = ancillary['sc_orient']
+        
+        # add the data frames at the photon level and at the major frame level
+        self.photon_data = df[(df['mframe'] >= self.mframe_start) & (df['mframe'] <= self.mframe_end)].copy()
+        self.mframe_data = df_mframe[(df_mframe.index >= self.mframe_start) & (df_mframe.index <= self.mframe_end)].copy()
+        self.date_time = convert_time_to_string(self.mframe_data['dt'].mean())
+        self.photon_data.reset_index(inplace=True)
+        
+        # compile the second returns in simple arrays
+        h_2nds = np.array([v for l in list(self.mframe_data['h_2nd_returns'])[2:-2] for v in l])
+        xatc_2nds = np.array([v for l in list(self.mframe_data['xatc_2nd_returns'])[2:-2] for v in l])
+        prom_2nds = np.array([v for l in list(self.mframe_data['proms_2nd_returns'])[2:-2] for v in l])
+        self.detection_2nd_returns = {'h':h_2nds, 'xatc':xatc_2nds, 'prom':prom_2nds}
+        
+        # add general lat/lon info for the whole lake
+        # self.detection_quality = np.sum(self.mframe_data['quality_summary']) / (len(self.mframe_data) - 4)
+        self.lat = self.mframe_data['lat'].mean()
+        self.lat_min = self.mframe_data['lat'].min()
+        self.lat_max = self.mframe_data['lat'].max()
+        self.lat_str = '%.5f°N'%(self.lat) if self.lat>=0 else '%.5f°S'%(-self.lat)
+        self.lon = self.mframe_data['lon'].mean()
+        self.lon_min = self.mframe_data['lon'].min()
+        self.lon_max = self.mframe_data['lon'].max()
+        self.lon_str = '%.5f°E'%(self.lon) if self.lon>=0 else '%.5f°W'%(-self.lon)
+        
+        # get the ice sheet and the melt season
+        self.ice_sheet = 'GrIS' if self.lat>=0 else 'AIS'
+        meltseason = 'XX'
+        if self.ice_sheet=='GrIS':
+            meltseason = self.date_time[:4]
+        elif self.ice_sheet=='AIS':
+            thismonth = int(self.date_time[5:7])
+            thisyear = int(self.date_time[:4])
+            if thismonth > 6:
+                meltseason = str(thisyear) + '-' + str((thisyear+1)%100)
+            elif thismonth <= 6:
+                meltseason = str(thisyear-1) + '-' + str(thisyear%100)
+        self.melt_season = meltseason
+        
+        # quick-look link to OpenAltimetry
+        mptyp = 'arctic' if self.lat>=0 else 'antarctic'
+        lake_oa_url = 'https://openaltimetry.org/data/icesat2/elevation?product=ATL03&zoom_level=7&tab=photon&'
+        lake_oa_url += 'date={date}&minx={minx}&miny={miny}&maxx={maxx}&maxy={maxy}&tracks={track}&mapType={mptyp}&beams={beam_nr}'.format(
+                date=self.date_time[:10], minx=self.lon_min, miny=self.lat_min, maxx=self.lon_max, maxy=self.lat_max,
+                track=self.rgt, mptyp=mptyp, beam_nr=self.beam_number)
+        self.oaurl = lake_oa_url
