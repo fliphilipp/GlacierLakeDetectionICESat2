@@ -1,5 +1,6 @@
 import os
 import h5py
+import math
 import datetime
 import traceback
 import pandas as pd
@@ -188,6 +189,10 @@ def make_mframe_df(df):
     df_mframe['lake_qual_pass'] = False
     df_mframe['has_densities'] = False
     df_mframe['ratio_2nd_returns'] = 0.0
+    df_mframe['alignment_penalty'] = 0.0
+    df_mframe['range_penalty'] = 0.0
+    df_mframe['length_penalty'] = 0.0
+    df_mframe['quality_secondreturns'] = 0.0
     df_mframe['quality_summary'] = 0.0
     empty_list = []
     df_mframe['xatc_2nd_returns'] = df_mframe.apply(lambda _: empty_list.copy(), axis=1)
@@ -199,8 +204,8 @@ def make_mframe_df(df):
 
 ##########################################################################################
 def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=1.0, bin_height_fine=0.02, smoothing_histogram=0.2, buffer=4.0,
-                            width_surf=0.1, width_buff=0.3, rel_dens_upper_thresh=5, rel_dens_lower_thresh=3,
-                            min_phot=100, min_snr_surface=50):
+                            width_surf=0.1, width_buff=0.3, rel_dens_upper_thresh=6, rel_dens_lower_thresh=3,
+                            min_phot=100, min_snr_surface=100):
     
     # initialize arrays for major-frame-level photon stats
     peak_locs = np.full(len(df_mframe), np.nan, dtype=np.double)
@@ -431,8 +436,9 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                                 idx_2ndreturn = np.argmax(peak_props['prominences'])
                                 secondpeak_h = mid_subseg_snr[peaks[idx_2ndreturn]]
 
-                                # classify as second peak only if elevation is 1m lower than main peak (surface) and higher than 50m below surface
-                                if (secondpeak_h < (peak_loc2-1.0)) & (secondpeak_h > (peak_loc2-50.0)):
+                                # classify as second peak only if elevation is 1.1m lower than main peak (surface) 
+                                # and higher than 50m below surface
+                                if (secondpeak_h < (peak_loc2-1.1)) & (secondpeak_h > (peak_loc2-50.0)):
                                     secondpeak_xtac = subsegstart + subsegwidth/2
                                     n_2nd_returns += 1
                                     prominences.append(prominence_secondpeak)
@@ -441,7 +447,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
 
             df.loc[selector_segment,'specular'] = dfseg['specular']
             
-            # keep only second returns that are 10 m or closer to the next one on either side 
+            # keep only second returns that are 5 m or closer to the next one on either side 
             # (helps filter out random noise, but might in rare cases suppress a signal)
             maxdiff = 5.0
             if len(elev_2ndpeaks) > 0:
@@ -463,33 +469,64 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                 subpeaks_xatc = np.array(subpeaks_xatc)[to_keep]
             
             # get the second return qualities
-            minqual = 0.25
-            minratio = 0.25
-            ratio_2nd_returns = n_2nd_returns/n_subsegs
-            df_mframe.loc[mframe, 'ratio_2nd_returns'] = ratio_2nd_returns
-            quality_secondreturns = np.sum(prominences) / n_subsegs
-            min_quality = (minqual - (ratio_2nd_returns-minratio)*(minqual/(1-minratio)))
+            minqual = 0.05
+            min_ratio_2nd_returns = 0.35
             quality_summary = 0.0
+            range_penalty = 0.0
+            alignment_penalty = 0.0
+            length_penalty = 0.0
+            quality_secondreturns = 0.0
             quality_pass = 'No'
-            if (ratio_2nd_returns >= minratio) & (quality_secondreturns >= min_quality): #& (yspread < max_yspread):
+            
+            ratio_2nd_returns = len(elev_2ndpeaks) / n_subsegs
+            # ________________________________________________________ 
+            if (len(elev_2ndpeaks) > 2) & (ratio_2nd_returns > min_ratio_2nd_returns):
+                h_range = np.max(elev_2ndpeaks) - np.min(elev_2ndpeaks)
+                diffs = np.diff(elev_2ndpeaks)
+                dirchange = np.abs(np.diff(np.sign(diffs))) > 1
+                total_distance = 0.0
+                for i,changed in enumerate(dirchange):
+                    if changed: total_distance += (np.abs(diffs)[i] + np.abs(diffs)[i+1])/2
+                alignment_penalty = 1.0 if total_distance==0 else\
+                                    np.clip(np.clip(h_range, 0.5, None) / (total_distance + np.clip(h_range, 0.5, None)), 0, 1)
+                range_penalty = np.clip(1/math.log(np.clip(h_range,1.1,None),5), 0, 1)
+                length_penalty = (len(elev_2ndpeaks) / n_subsegs)**1.5
+                quality_secondreturns = np.clip(np.mean(prominences) * ((np.clip(2*len(elev_2ndpeaks)/n_subsegs, 1, None)-1)*2+1), 0, 1)
+                quality_summary = alignment_penalty * length_penalty * range_penalty * quality_secondreturns
+    
+            # ________________________________________________________
+            
+            df_mframe.loc[mframe, 'ratio_2nd_returns'] = ratio_2nd_returns
+            df_mframe.loc[mframe, 'alignment_penalty'] = alignment_penalty
+            df_mframe.loc[mframe, 'range_penalty'] = range_penalty
+            df_mframe.loc[mframe, 'length_penalty'] = length_penalty
+            df_mframe.loc[mframe, 'quality_secondreturns'] = quality_secondreturns
+            df_mframe.loc[mframe, 'quality_summary'] = quality_summary
+            
+            if quality_summary > minqual: #& (yspread < max_yspread):
                 quality_pass = 'Yes'
-                quality_summary = ratio_2nd_returns*(quality_secondreturns-min_quality)/(ratio_2nd_returns-min_quality)
                 df_mframe.loc[mframe, 'lake_qual_pass'] = True
-                df_mframe.loc[mframe, 'quality_summary'] = quality_summary
 
-                for i in range(len(elev_2ndpeaks)):
-                    df_mframe.loc[mframe, 'h_2nd_returns'].append(elev_2ndpeaks[i])
-                    df_mframe.loc[mframe, 'xatc_2nd_returns'].append(subpeaks_xatc[i])
-                    df_mframe.loc[mframe, 'proms_2nd_returns'].append(prominences[i])
+            for i in range(len(elev_2ndpeaks)):
+                df_mframe.loc[mframe, 'h_2nd_returns'].append(elev_2ndpeaks[i])
+                df_mframe.loc[mframe, 'xatc_2nd_returns'].append(subpeaks_xatc[i])
+                df_mframe.loc[mframe, 'proms_2nd_returns'].append(prominences[i])
 
             # if (percent_2d_returns >= 30) & (quality_secondreturns > 0.4):
             flatstring = 'Yes' if df_mframe['is_flat'].loc[mframe] else 'No'
 
             if print_results:
-                print('   mframe %03i: h=%7.2fm. flat=%3s. snrs=%4i,%4i,%4i. 2nds=%3d%%. qual=%4.2f. pass=%3s.' % \
-                    (mframe%1000, peak_loc2, flatstring, df_mframe.loc[mframe,'snr_surf'], 
-                     df_mframe.loc[mframe,'snr_upper'],df_mframe.loc[mframe, 'snr_lower'],
-                     np.round(ratio_2nd_returns*100), quality_summary, quality_pass))
+                txt  = '  mframe %03i: ' % (mframe%1000)
+                txt += 'h=%7.2fm | ' % peak_loc2
+                txt += 'flat=%3s | ' % flatstring
+                txt += 'snrs=%4i,%4i,%4i | ' % (df_mframe.loc[mframe,'snr_surf'],df_mframe.loc[mframe,'snr_upper'],df_mframe.loc[mframe, 'snr_lower'])
+                txt += '2nds=%3d%% | ' % np.round(length_penalty*100)
+                txt += 'range=%4.2f ' % range_penalty
+                txt += 'align=%4.2f ' % alignment_penalty
+                txt += 'strength=%4.2f --> ' % quality_secondreturns
+                txt += 'qual=%4.2f | ' % quality_summary
+                txt += 'pass=%3s' % quality_pass
+                print(txt)
             
             # adjust SNR values for specular returns
             df.loc[df['specular'], 'snr'] = 0.0

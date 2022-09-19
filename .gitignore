@@ -12,3 +12,6 @@ zip_testing.zip
 figs/*.jpg
 shapefiles/
 test_nsidc_osg/outputs/
+*.pkl
+figs_extent/
+random_testing.ipynb
