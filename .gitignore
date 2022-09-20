@@ -15,3 +15,4 @@ test_nsidc_osg/outputs/
 *.pkl
 figs_extent/
 random_testing.ipynb
+figs_random/

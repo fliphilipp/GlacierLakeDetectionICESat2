@@ -124,6 +124,7 @@ def read_atl03(filename, geoid_h=True):
                                # 'conf': np.array(f[beam]['heights']['signal_conf_ph'][:,conf_landice]),
                                # not using ATL03 confidences here
                                'mframe': np.array(f[beam]['heights']['pce_mframe_cnt']),
+                               'ph_id_pulse': np.array(f[beam]['heights']['ph_id_pulse']),
                                'qual': np.array(f[beam]['heights']['quality_ph'])}) 
                                # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
 
