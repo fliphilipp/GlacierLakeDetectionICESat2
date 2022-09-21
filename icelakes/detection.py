@@ -109,13 +109,21 @@ def read_atl03(filename, geoid_h=True):
                  'cycle_number': f['orbit_info']['cycle_number'][0],
                  'sc_orient': orient_str,
                  'gtx_beam_dict': gtx_beam_dict,
-                 'gtx_strength_dict': gtx_strength_dict}
-    
+                 'gtx_strength_dict': gtx_strength_dict,
+                 'gtx_dead_time_dict': {}}
+
     # loop through all beams
     print('  reading in beam:', end=' ')
     for beam in beamlist:
+        
         print(beam, end=' ')
         try:
+            
+            if gtx_strength_dict[beam]=='strong':
+                ancillary['gtx_dead_time_dict'][beam] = np.mean(np.array(f['ancillary_data']['calibrations']['dead_time'][beam]['dead_time'])[:16])
+            else:
+                ancillary['gtx_dead_time_dict'][beam] = np.mean(np.array(f['ancillary_data']['calibrations']['dead_time'][beam]['dead_time'])[16:])
+               
             #### get photon-level data
             df = pd.DataFrame({'lat': np.array(f[beam]['heights']['lat_ph']),
                                'lon': np.array(f[beam]['heights']['lon_ph']),
@@ -470,7 +478,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                 subpeaks_xatc = np.array(subpeaks_xatc)[to_keep]
             
             # get the second return qualities
-            minqual = 0.05
+            minqual = 0.1
             min_ratio_2nd_returns = 0.35
             quality_summary = 0.0
             range_penalty = 0.0
@@ -770,11 +778,13 @@ def calculate_remaining_densities(df, df_mframe, df_extracted_lakes, gtx, ancill
 def prnt(df_lakes):
     print('results:')
     try:
-        if len(df_lakes) == 0: print('<<<   NO LAKES :(   >>>')
+        if len(df_lakes) == 0: print('<<<   SAD. NO LAKES :(   >>>')
         else:
             for i in df_lakes.index: 
-                print('  lake %i: %2i-%2i (h=%7.2f)' % (i, df_lakes.loc[i, 'mframe_start']%100, 
-                       df_lakes.loc[i, 'mframe_end']%100, df_lakes.loc[i, 'surf_elev']))
+                print('  lake %i: %04i-%04i (length: %4i major frames, surface elevation: %7.2f m)' % (i, 
+                       np.abs(df_lakes.loc[i, 'mframe_end']-df_lakes.loc[i, 'mframe_start']),
+                       df_lakes.loc[i, 'mframe_start']%10000, df_lakes.loc[i, 'mframe_end']%10000, 
+                       df_lakes.loc[i, 'surf_elev']))
     except:
         print('Something went wrong here...' % mframe)
         traceback.print_exc()
@@ -823,7 +833,6 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
             thislake = melt_lake(lakedata.mframe_start, lakedata.mframe_end, lakedata.surf_elev)
             thislake.add_data(df, df_mframe, gtx, ancillary, polygon)
             thelakes.append(thislake)
-    
     
     return thelakes
 

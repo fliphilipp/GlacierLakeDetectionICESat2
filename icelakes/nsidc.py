@@ -209,7 +209,8 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                     '/gtx/heights/delta_time',
                     '/gtx/heights/pce_mframe_cnt',
                     '/gtx/heights/ph_id_pulse',
-                    '/gtx/heights/quality_ph']
+                    '/gtx/heights/quality_ph',
+                    '/ancillary_data/calibrations/dead_time/gtx']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     
     if gtxs == 'all':
