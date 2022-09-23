@@ -1,4 +1,6 @@
 *.h5
+*.jpg
+temp.csv
 IS2data/
 __pycache__/
 .ipynb_checkpoints/

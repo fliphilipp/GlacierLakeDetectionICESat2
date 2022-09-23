@@ -48,6 +48,7 @@ def shp2geojson(shapefile, output_directory = 'geojsons/'):
     poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
     gpd.GeoSeries(poly).to_file(outfilename, driver='GeoJSON')
     print('Wrote file: %s' % outfilename)
+    return outfilename
     
 ##########################################################################################    
 def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
