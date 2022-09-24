@@ -51,7 +51,7 @@ def shp2geojson(shapefile, output_directory = 'geojsons/'):
     return outfilename
     
 ##########################################################################################    
-def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
+def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
     """
     Query for available granules over a region of interest and a start
     and end date. This will write a csv file with one column being the 
@@ -129,7 +129,7 @@ def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_
                                                                           geojson, start_date, end_date))
 
     granule_list = [g['producer_granule_id'] for g in granules]
-    description = [geojson[geojson.rfind('/')+1:].replace('.geojson','-') + start_date[:4]] * len(granule_list)
+    description = [icesheet + '_' + meltseason + '_' + geojson.replace('.geojson','')] * len(granule_list)
     if geojson_dir_remote is None:
         geojson_remote = geojson_dir_local + geojson
     else:
