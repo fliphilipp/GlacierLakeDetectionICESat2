@@ -129,12 +129,13 @@ def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_
                                                                           geojson, start_date, end_date))
 
     granule_list = [g['producer_granule_id'] for g in granules]
+    description = [geojson[geojson.rfind('/')+1:].replace('.geojson','-') + start_date[:4]] * len(granule_list)
     if geojson_dir_remote is None:
         geojson_remote = geojson_dir_local + geojson
     else:
         geojson_remote = geojson_dir_remote + geojson
 
-    thisdf = pd.DataFrame({'granule': granule_list, 'geojson': geojson_remote})
+    thisdf = pd.DataFrame({'granule': granule_list, 'geojson': geojson_remote, 'description': description})
     if list_out_name == 'auto':
         list_out_name = 'granule_lists/' + geojson.replace('.geojson', ''), + '_' + start_date[:4] + '.csv'
     thisdf.to_csv(list_out_name, header=False, index=False)

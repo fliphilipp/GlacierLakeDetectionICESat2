@@ -15,12 +15,12 @@ preserve_relative_paths = True
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 
-log           = logs/job_$(polygon)-$(ClusterID)_$(granule)-$(ProcID).log
-error         = errs/job_$(polygon)-$(ClusterID)_$(granule)-$(ProcID).err
-output        = outs/job_$(polygon)-$(ClusterID)_$(granule)-$(ProcID).out
+log           = logs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).log
+error         = errs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).err
+output        = outs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).out
 
 request_cpus    = 1
 request_memory  = 2GB
 request_disk    = 4GB
 
-queue granule,polygon from granule_lists/jakobshavn_small_2019.csv
+queue granule,polygon,descriptor from granule_lists/jakobshavn_small_2019.csv
