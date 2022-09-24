@@ -5,6 +5,7 @@
 *.log
 *.err
 *.out
+*.sif
 temp.csv
 IS2data/
 __pycache__/
