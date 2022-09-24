@@ -80,7 +80,7 @@ def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_
 
     Examples
     --------
-    >>> make_granule_list(my_geojson.geojson, '2021-05-01', '2021-09-15', 'granule_lists/my_geojson_2021.csv', 
+    >>> make_granule_list(my_geojson.geojson, '2021-05-01', '2021-09-15', 'auto', 
                           geojson_dir_local='geojsons/', geojson_dir_remote=None)
     """    
 
@@ -135,6 +135,8 @@ def make_granule_list(geojson, start_date, end_date, list_out_name, geojson_dir_
         geojson_remote = geojson_dir_remote + geojson
 
     thisdf = pd.DataFrame({'granule': granule_list, 'geojson': geojson_remote})
+    if list_out_name == 'auto':
+        list_out_name = 'granule_lists/' + geojson.replace('.geojson', ''), + '_' + start_date[:4] + '.csv'
     thisdf.to_csv(list_out_name, header=False, index=False)
     print('Wrote file: %s' % list_out_name)
     

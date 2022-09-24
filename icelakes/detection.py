@@ -1207,7 +1207,7 @@ class melt_lake:
     
 
     #-------------------------------------------------------------------------------------
-    def plot_detected(self, fig_dir='figs', verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=False):
+    def plot_detected(self, fig_dir='figs', verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True):
 
         import matplotlib
         from matplotlib.patches import Rectangle
@@ -1220,7 +1220,7 @@ class melt_lake:
         lake_maxh = np.min((self.mframe_data['peak'].max(), self.main_peak+0.5*lake_max_depth))
         buffer_bottom = np.max((0.5*lake_max_depth, 2.0))
         lake_minh_plot = lake_minh - buffer_bottom
-        buffer_top = (lake_maxh - lake_minh_plot) * 0.2
+        buffer_top = (lake_maxh - lake_minh_plot) * 0.5
         lake_maxh_plot = lake_maxh + buffer_top
         ylms = (lake_minh_plot, lake_maxh_plot)
         xlms = (0.0, self.mframe_data.xatc_max.max())
@@ -1318,25 +1318,42 @@ class melt_lake:
 
             # add mframe info text
             if print_mframe_info:
-                for i,loc in enumerate(self.mframe_data['xatc_min']):
+                txt  = 'mframe:\n' % (mf.name%1000)
+                txt += 'photons:\n' % mf.n_phot
+                txt += 'peak:\n'
+                txt += 'flat:\n'
+                txt += 'SNR surf:\n'
+                txt += 'SNR up:\n'
+                txt += 'SNR low:\n'
+                txt += '2nds:\n'
+                txt += '2nds strength:\n'
+                txt += '2nds number:\n'
+                txt += '2nds spread:\n'
+                txt += '2nds align:\n'
+                txt += '2nds quality:\n'
+                txt += 'pass:'
+                # trans = ax.get_xaxis_transform()
+                bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
+                ax.text(-0.005, 0.98, txt, transform=ax.transAxes, fontsize=4, ha='right', va='top', bbox=bbox)
+                for i,loc in enumerate(self.mframe_data['xatc']):
                     mf = self.mframe_data.iloc[i]
-                    txt  = 'mframe: %i\n' % (mf.name%1000)
-                    txt += 'photons: %i\n' % mf.n_phot
-                    txt += 'peak: %.2f\n' % mf.peak
-                    txt += 'flat: %s\n' % ('Yes.' if mf.is_flat else 'No.')
-                    txt += 'SNR surf: %i\n' % np.round(mf.snr_surf)
-                    txt += 'SNR up: %i\n' % np.round(mf.snr_upper)
-                    txt += 'SNR low: %i\n' % np.round(mf.snr_lower)
-                    txt += '2nds: %i%%\n' % np.round(mf.ratio_2nd_returns*100)
-                    txt += '2nds strength: %.2f\n' % mf.quality_secondreturns
-                    txt += '2nds number: %.2f\n' % mf.length_penalty
-                    txt += '2nds spread: %.2f\n' % mf.range_penalty
-                    txt += '2nds align: %.2f\n' % mf.alignment_penalty
-                    txt += '2nds quality: %.2f\n' % mf.quality_summary
-                    txt += 'pass: %s' % ('Yes.' if mf.lake_qual_pass else 'No.')
+                    txt  = '%i\n' % (mf.name%1000)
+                    txt += '%i\n' % mf.n_phot
+                    txt += '%.2f\n' % mf.peak
+                    txt += '%s\n' % ('Yes.' if mf.is_flat else 'No.')
+                    txt += '%i\n' % np.round(mf.snr_surf)
+                    txt += '%i\n' % np.round(mf.snr_upper)
+                    txt += '%i\n' % np.round(mf.snr_lower)
+                    txt += '%i%%\n' % np.round(mf.ratio_2nd_returns*100)
+                    txt += '%.2f\n' % mf.quality_secondreturns
+                    txt += '%.2f\n' % mf.length_penalty
+                    txt += '%.2f\n' % mf.range_penalty
+                    txt += '%.2f\n' % mf.alignment_penalty
+                    txt += '%.2f\n' % mf.quality_summary
+                    txt += '%s' % ('Yes.' if mf.lake_qual_pass else 'No.')
                     trans = ax.get_xaxis_transform()
                     bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
-                    ax.text(loc+5, 0.99, txt, transform=trans, fontsize=3, va='top', bbox=bbox)
+                    ax.text(loc, 0.98, txt, transform=trans, fontsize=4,ha='center', va='top', bbox=bbox)
 
             # add detection quality description
             txt  = 'LAKE QUALITY: %6.4f'%self.detection_quality
@@ -1344,22 +1361,15 @@ class melt_lake:
             txt += '2nd returns: %6.4f\n' % self.detection_quality_info['strength_2nd_returns']
             txt += 'alignment: %6.4f\n' % self.detection_quality_info['qual_alignment']
             txt += 'depth: %6.4f\n' % self.detection_quality_info['lake_depth']
-            txt += 'length: %6.4f' % self.detection_quality_info['lake_length']
+            txt += 'length: %6.4f\n' % self.detection_quality_info['lake_length']
+            txt += 'depth range: %6.4f' % self.detection_quality_info['h_range_2nd_returns']
             bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
-            ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=8, weight='bold', bbox=bbox)
+            ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=6, weight='bold', bbox=bbox)
 
             fig.patch.set_facecolor('white')
             fig.tight_layout()
             ax.set_ylim(ylms)
             ax.set_xlim(xlms)
-
-            # save figure
-            if not os.path.exists(fig_dir): os.makedirs(fig_dir)
-            epoch = self.mframe_data['dt'].mean() + datetime.datetime.timestamp(datetime.datetime(2018,1,1))
-            dateid = datetime.datetime.fromtimestamp(epoch).strftime("%Y%m%d-%H%M%S")
-            granid = self.granule_id[:-3]
-            latid = '%dN'%(int(np.round(self.lat*1e5))) if self.lat>=0 else '%dS'%(-int(np.round(self.lat*1e5)))
-            lonid = '%dE'%(int(np.round(self.lon*1e5))) if self.lon>=0 else '%dW'%(-int(np.round(self.lon*1e5)))
 
             plt.close(fig)
 
