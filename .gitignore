@@ -10,7 +10,6 @@ temp.csv
 IS2data/
 __pycache__/
 .ipynb_checkpoints/
-misc/test1
 *.bash_history
 *.python_history
 shapefiles/
