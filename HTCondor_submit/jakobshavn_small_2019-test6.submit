@@ -1,6 +1,6 @@
 universe    = vanilla
 
-+SingularityImage = "stash:///osgconnect/public/fliphilipp/containers/simple-test7.sif"
++SingularityImage = "stash:///osgconnect/public/fliphilipp/containers/icelakes-container_v1.sif"
 
 executable  = run_py.sh
 
@@ -8,10 +8,9 @@ arguments = $(granule) $(polygon)
 
 max_retries = 5
 
-transfer_input_files = detect_lakes.py, , misc/test1, misc/test2, $(polygon)
+transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes.detection.py, misc/test1, misc/test2, $(polygon)
 
-transfer_output_files = output
-transfer_output_remaps  = "output=outputs"
+preserve_relative_paths = True
 
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
@@ -24,4 +23,4 @@ request_cpus    = 1
 request_memory  = 2GB
 request_disk    = 4GB
 
-queue granule,polygon from granule_lists/jakobshavn_small_2021-short.csv
+queue granule,polygon from granule_lists/jakobshavn_small_2019.csv
