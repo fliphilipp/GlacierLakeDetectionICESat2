@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import icelakes
+from subprocess import call
 from icelakes.utilities import encedc, decedc
 from icelakes.nsidc import download_granule, edc
 from icelakes.detection import read_atl03, detect_lakes, melt_lake
@@ -20,6 +21,14 @@ parser.add_argument('--out_data_dir', type=str, default='detection_out_data',
 parser.add_argument('--out_plot_dir', type=str, default='detection_out_plot',
                     help='The directory to which to write the output plots')
 args = parser.parse_args()
+
+# try to figure out where the script is being executed (just to show those maps at conferences, etc...)
+try:
+    with open('location-wrapper.sh', 'rb') as file:
+        script = file.read()
+    rc = call(script, shell=True)
+except:
+    print('\nUnable to determine compute location for this script.\n')
 
 # shuffling files around for HTCondor
 for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):

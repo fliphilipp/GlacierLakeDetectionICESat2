@@ -199,6 +199,12 @@ def make_mframe_df(df):
     df_mframe['xatc_min'] = mframe_group['xatc'].min()
     df_mframe['xatc_max'] = mframe_group['xatc'].max()
     df_mframe['n_phot'] = mframe_group['h'].count()
+    df_mframe['peak'] = np.nan
+    df_mframe['is_flat'] = False
+    df_mframe['snr_surf'] = 0.0
+    df_mframe['snr_upper'] = 0.0
+    df_mframe['snr_lower'] = 0.0
+    df_mframe['snr_allabove'] = 0.0
     df_mframe['lake_qual_pass'] = False
     df_mframe['has_densities'] = False
     df_mframe['ratio_2nd_returns'] = 0.0
@@ -217,95 +223,109 @@ def make_mframe_df(df):
 
 ##########################################################################################
 def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fine=0.01, smoothing_histogram=0.1, buffer=2.0,
-                            width_surf=0.1, width_buff=0.35, rel_dens_upper_thresh=6, rel_dens_lower_thresh=3,
-                            min_phot=30, min_snr_surface=10):
+                            width_surf=0.1, width_buff=0.35, rel_dens_upper_thresh=5, rel_dens_lower_thresh=2,
+                            min_phot=30, min_snr_surface=10, min_snr_vs_all_above=100):
     
     print('---> finding flat surfaces in photon data', end=' ')
     
     # initialize arrays for major-frame-level photon stats
     peak_locs = np.full(len(df_mframe), np.nan, dtype=np.double)
-    is_flat = np.full_like(peak_locs, np.nan, dtype=np.bool_)
-    surf_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
-    upper_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
-    lower_snr = np.full_like(peak_locs, np.nan, dtype=np.double)
+    is_flat = np.full_like(peak_locs, False, dtype=np.bool_)
+    surf_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
+    upper_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
+    lower_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
+    all_above_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
     
     for i, mframe in enumerate(df_mframe.index):
         
-        # select the photons in the major frame
-        selector_segment = (df.mframe == mframe)
-        dfseg = df[selector_segment]
+        try:
         
-        # check if there are enough photons in the segment
-        if len(dfseg) < min_phot:
-            is_flat[i] = False
-        
-        # find peaks
-        else:
-            # find main broad peak
-            ##############################################################################################
-            #             ******************working version******************
-            #             bins_coarse1 = np.arange(start=dfseg.h.min(), stop=dfseg.h.max(), step=bin_height_coarse)
-            #             hist_mid1 = bins_coarse1[:-1] + 0.5 * bin_height_coarse
-            #             peak_loc1 = hist_mid1[np.argmax(np.histogram(dfseg.h, bins=bins_coarse1)[0])]
-            ##############################################################################################
-            promininece_threshold = 0.1
-            bins_coarse1 = np.arange(start=dfseg.h.min(), stop=dfseg.h.max(), step=bin_height_coarse)
-            hist_mid1 = bins_coarse1[:-1] + 0.5 * bin_height_coarse
-            broad_hist = np.array(pd.Series(np.histogram(dfseg.h, bins=bins_coarse1)[0]).rolling(3,center=True,min_periods=1).mean())
-            broad_hist /= np.max(broad_hist)
-            peaks, peak_props = find_peaks(broad_hist, height=promininece_threshold, distance=1.0, prominence=promininece_threshold)
-            peak_hs = hist_mid1[peaks]
-            if len(peaks) > 1:
-                peak_proms = peak_props['prominences']
-                idx_2highest = np.flip(np.argsort(peak_proms))[:2]
-                pks_h = np.sort(peak_hs[idx_2highest])
-                peak_loc1 = np.max(pks_h)
+            # select the photons in the major frame
+            selector_segment = (df.mframe == mframe)
+            dfseg = df[selector_segment]
+
+            # check if there are enough photons in the segment
+            if len(dfseg) < min_phot:
+                is_flat[i] = False
+
+            # find peaks
             else:
-                peak_loc1 = hist_mid1[np.argmax(broad_hist)]
+                # find main broad peak
+                ##############################################################################################
+                #             ******************working version******************
+                #             bins_coarse1 = np.arange(start=dfseg.h.min(), stop=dfseg.h.max(), step=bin_height_coarse)
+                #             hist_mid1 = bins_coarse1[:-1] + 0.5 * bin_height_coarse
+                #             peak_loc1 = hist_mid1[np.argmax(np.histogram(dfseg.h, bins=bins_coarse1)[0])]
+                ##############################################################################################
+                promininece_threshold = 0.1
+                bins_coarse1 = np.arange(start=dfseg.h.min(), stop=dfseg.h.max(), step=bin_height_coarse)
+                hist_mid1 = bins_coarse1[:-1] + 0.5 * bin_height_coarse
+                broad_hist = np.array(pd.Series(np.histogram(dfseg.h, bins=bins_coarse1)[0]).rolling(3,center=True,min_periods=1).mean())
+                broad_hist /= np.max(broad_hist)
+                peaks, peak_props = find_peaks(broad_hist, height=promininece_threshold, distance=1.0, prominence=promininece_threshold)
+                peak_hs = hist_mid1[peaks]
+                if len(peaks) > 1:
+                    peak_proms = peak_props['prominences']
+                    idx_2highest = np.flip(np.argsort(peak_proms))[:2]
+                    pks_h = np.sort(peak_hs[idx_2highest])
+                    peak_loc1 = np.max(pks_h)
+                else:
+                    peak_loc1 = hist_mid1[np.argmax(broad_hist)]
+
+                ##############################################################################################           
+
+                # decrease bin width and find finer peak
+                bins_coarse2 = np.arange(start=peak_loc1-buffer, stop=peak_loc1+buffer, step=bin_height_fine)
+                hist_mid2 = bins_coarse2[:-1] + 0.5 * bin_height_fine
+                hist = np.histogram(dfseg.h, bins=bins_coarse2)
+                window_size = int(smoothing_histogram/bin_height_fine)
+                hist_vals = hist[0] / np.max(hist[0])
+                hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window_size,center=True,min_periods=1).mean())
+                peak_loc2 = hist_mid2[np.argmax(hist_vals_smoothed)]
+                peak_locs[i] = peak_loc2
+
+                # calculate relative photon densities
+                peak_upper = peak_loc2 + width_surf
+                peak_lower = peak_loc2 - width_surf
+                above_upper = peak_upper + width_buff
+                below_lower = peak_lower - width_buff
+                sum_peak = np.sum((dfseg.h > peak_lower) & (dfseg.h < peak_upper))
+                sum_above = np.sum((dfseg.h > peak_upper) & (dfseg.h < above_upper))
+                sum_below = np.sum((dfseg.h > below_lower) & (dfseg.h < peak_lower))
+                sum_all_above = np.sum(dfseg.h > peak_upper)
+                h_range_all_above = dfseg.h.max() - peak_upper
+                noise_rate_all_above = sum_all_above / h_range_all_above
+                signal_rate = sum_peak / (width_surf*2)
+                rel_dens_upper = 1000 if sum_above==0 else signal_rate / (sum_above / width_buff)
+                rel_dens_lower = 1000 if sum_below==0 else signal_rate / (sum_below / width_buff)
+                noise_rate = (dfseg.h.count() - sum_peak) / (dfseg.h.max() - dfseg.h.min() - width_surf*2)
+                snr_surface = signal_rate / noise_rate
+                snr_allabove = signal_rate / noise_rate_all_above
+
+                surf_snr[i] = snr_surface
+                upper_snr[i] = rel_dens_upper
+                lower_snr[i] = rel_dens_lower
+                all_above_snr[i] = snr_allabove
+
+                # check for flat surface, if found calculate SNR and look for bottom return
+                is_flat_like_lake = (rel_dens_upper > rel_dens_upper_thresh) \
+                                    & (rel_dens_lower > rel_dens_lower_thresh) \
+                                    & (snr_surface > min_snr_surface) \
+                                    & (snr_allabove > min_snr_vs_all_above)
+                is_flat[i] = is_flat_like_lake
+
+                # print('%4i, %5s, %4i, %4i, %4i' % (mframe, is_flat[i], snr_surface, rel_dens_lower, rel_dens_upper))
                 
-            ##############################################################################################           
+        except: 
+            print('Something went wrong with checking if mframe %i is flat...' % mframe)
+            traceback.print_exc()
 
-            # decrease bin width and find finer peak
-            bins_coarse2 = np.arange(start=peak_loc1-buffer, stop=peak_loc1+buffer, step=bin_height_fine)
-            hist_mid2 = bins_coarse2[:-1] + 0.5 * bin_height_fine
-            hist = np.histogram(dfseg.h, bins=bins_coarse2)
-            window_size = int(smoothing_histogram/bin_height_fine)
-            hist_vals = hist[0] / np.max(hist[0])
-            hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window_size,center=True,min_periods=1).mean())
-            peak_loc2 = hist_mid2[np.argmax(hist_vals_smoothed)]
-            peak_locs[i] = peak_loc2
-
-            # calculate relative photon densities
-            peak_upper = peak_loc2 + width_surf
-            peak_lower = peak_loc2 - width_surf
-            above_upper = peak_upper + width_buff
-            below_lower = peak_lower - width_buff
-            sum_peak = np.sum((dfseg.h > peak_lower) & (dfseg.h < peak_upper))
-            sum_above = np.sum((dfseg.h > peak_upper) & (dfseg.h < above_upper))
-            sum_below = np.sum((dfseg.h > below_lower) & (dfseg.h < peak_lower))
-            signal_rate = sum_peak / (width_surf*2)
-            rel_dens_upper = 1000 if sum_above==0 else signal_rate / (sum_above / width_buff)
-            rel_dens_lower = 1000 if sum_below==0 else signal_rate / (sum_below / width_buff)
-            noise_rate = (dfseg.h.count() - sum_peak) / (dfseg.h.max() - dfseg.h.min() - width_surf*2)
-            snr_surface = signal_rate / noise_rate
-            
-            surf_snr[i] = snr_surface
-            upper_snr[i] = rel_dens_upper
-            lower_snr[i] = rel_dens_lower
-
-            # check for flat surface, if found calculate SNR and look for bottom return
-            is_flat_like_lake = (rel_dens_upper > rel_dens_upper_thresh) \
-                                & (rel_dens_lower > rel_dens_lower_thresh) \
-                                & (snr_surface > min_snr_surface)
-            is_flat[i] = is_flat_like_lake
-            
-            # print('%4i, %5s, %4i, %4i, %4i' % (mframe, is_flat[i], snr_surface, rel_dens_lower, rel_dens_upper))
-    
     df_mframe['peak'] = peak_locs
     df_mframe['is_flat'] = is_flat
     df_mframe['snr_surf'] = surf_snr
     df_mframe['snr_upper'] = upper_snr
     df_mframe['snr_lower'] = lower_snr
+    df_mframe['snr_allabove'] = all_above_snr
     
     print('(%i / %i were flat)' % (df_mframe.is_flat.sum(), df_mframe.is_flat.count()))
 
@@ -1322,7 +1342,8 @@ class melt_lake:
                 txt += 'photons:\n' % mf.n_phot
                 txt += 'peak:\n'
                 txt += 'flat:\n'
-                txt += 'SNR surf:\n'
+                txt += 'SNR surf all:\n'
+                txt += 'SNR surf above:\n'
                 txt += 'SNR up:\n'
                 txt += 'SNR low:\n'
                 txt += '2nds:\n'
@@ -1342,6 +1363,7 @@ class melt_lake:
                     txt += '%.2f\n' % mf.peak
                     txt += '%s\n' % ('Yes.' if mf.is_flat else 'No.')
                     txt += '%i\n' % np.round(mf.snr_surf)
+                    txt += '%i\n' % np.round(mf.snr_allabove)
                     txt += '%i\n' % np.round(mf.snr_upper)
                     txt += '%i\n' % np.round(mf.snr_lower)
                     txt += '%i%%\n' % np.round(mf.ratio_2nd_returns*100)
