@@ -1,6 +1,6 @@
 universe    = vanilla
 
-+SingularityImage = "stash:///osgconnect/public/fliphilipp/containers/icelakes-container_v1.sif"
++SingularityImage = "stash:///osgconnect/public/fliphilipp/containers/icelake-container_v1.sif"
 
 executable  = run_py.sh
 
@@ -8,16 +8,16 @@ arguments = $(granule) $(polygon)
 
 max_retries = 5
 
-transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes.detection.py, misc/test1, misc/test2, $(polygon)
+transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon)
 
 preserve_relative_paths = True
 
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 
-log           = logs/job.$(granule).$(ClusterID).$(ProcID).log
-error         = errs/job.$(granule).$(ClusterID).$(ProcID).err
-output        = outs/job.$(granule).$(ClusterID).$(ProcID).out
+log           = logs/job_$(polygon)-$(ClusterID)_$(granule)-$(ProcID).log
+error         = errs/job_$(polygon)-$(ClusterID)_$(granule)-$(ProcID).err
+output        = outs/job_$(polygon)-$(ClusterID)_$(granule)-$(ProcID).out
 
 request_cpus    = 1
 request_memory  = 2GB
