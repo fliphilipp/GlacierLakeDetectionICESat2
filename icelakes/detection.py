@@ -982,7 +982,7 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     # iteratively merge the detected segments into lakes 
     df_lakes = merge_lakes(df_mframe, print_progress=verbose, debug=verbose)
-    if df_lakes is None: return []
+    if df_lakes is None: return [], {}
     df_lakes = check_lake_surroundings(df_mframe, df_lakes)
     calculate_remaining_densities(df, df_mframe, df_lakes, gtx, ancillary)
     

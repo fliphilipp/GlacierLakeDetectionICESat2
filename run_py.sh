@@ -17,3 +17,9 @@ mv *.geojson geojsons/
 
 # Run the Python script 
 python3 detect_lakes.py --granule $1 --polygon $2
+
+if (ls detection_out_stat | wc -l) > 0
+    exit 0
+else
+    exit 4
+fi
