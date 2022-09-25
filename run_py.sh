@@ -4,6 +4,9 @@
 mkdir icelakes
 mkdir misc
 mkdir geojsons
+mkdir detection_out_data
+mkdir detection_out_plot
+mkdir detection_out_stat
 mv __init__.py icelakes/
 mv utilities.py icelakes/
 mv nsidc.py icelakes/

@@ -1261,7 +1261,10 @@ class melt_lake:
                 print(' ')
         else:
             if verbose: print('Not enough second returns to estimate quality... Setting to zero.')
-
+        
+        if np.isnan(total_quality): total_quality = 0.0
+        for k in quality_props.keys():
+            if np.isnan(quality_props[k]): quality_props[k] = 0.0
         self.detection_quality_info = quality_props
         self.detection_quality = total_quality
 

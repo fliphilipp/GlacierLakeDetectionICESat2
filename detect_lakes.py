@@ -1,8 +1,8 @@
 import argparse
 import os
 import pickle
+import subprocess
 import icelakes
-from subprocess import call
 from icelakes.utilities import encedc, decedc
 from icelakes.nsidc import download_granule, edc
 from icelakes.detection import read_atl03, detect_lakes, melt_lake
@@ -26,10 +26,12 @@ args = parser.parse_args()
 
 # try to figure out where the script is being executed (just to show those maps at conferences, etc...)
 try:
-    with open('location-wrapper.sh', 'rb') as file:
-        script = file.read()
-    rc = call(script, shell=True)
+    with open('location-wrapper.sh', 'rb') as file: script = file.read()
+    geoip_out = subprocess.run(script, shell=True, capture_output=True)
+    compute_latlon = str(geoip_out.stdout)[str(geoip_out.stdout).find('<x><y><z>')+9 : str(geoip_out.stdout).find('<z><y><x>')]
+    print('\nThis job is running at the following lat/lon location:%s\n' % compute_latlon)
 except:
+    compute_latlon='0.0,0.0'
     print('\nUnable to determine compute location for this script.\n')
 
 # shuffling files around for HTCondor
@@ -67,7 +69,7 @@ for lake in lake_list:
 
 lk = lake_list[0]
 statsfname = args.out_stat_dir + '/stats_%s_%s_%s_%s.csv' % (lk.ice_sheet, lk.melt_season, lk.polygon_name, lk.granule_id[:-4])
-with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i' % tuple(granule_stats.values()), file=f)
+with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(list(granule_stats.values())+[compute_latlon]), file=f)
     
 # clean up the input data
 os.remove(input_filename)

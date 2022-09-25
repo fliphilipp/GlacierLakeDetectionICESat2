@@ -2,7 +2,8 @@ universe    = vanilla
 
 +SingularityImage = "stash:///osgconnect/public/fliphilipp/containers/icelake-container_v1.sif"
 
-requirements = OSG_OS_STRING == "RHEL 7" && HAS_MODULES && GLIDEIN_Gatekeeper =!= UNDEFINED
+# the requirements for locating the jobs (commented out because not totally necessary...)
+# requirements = OSG_OS_STRING == "RHEL 7" && HAS_MODULES && GLIDEIN_Gatekeeper =!= UNDEFINED
 
 executable  = run_py.sh
 
@@ -12,7 +13,7 @@ max_retries = 5
 
 transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon), wn-geoip.tar.gz, location-wrapper.sh
 
-preserve_relative_paths = True
+transfer_output_files = detection_out_data, detection_out_plot, detection_out_stat
 
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
@@ -23,6 +24,6 @@ output        = outs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).out
 
 request_cpus    = 1
 request_memory  = 2GB
-request_disk    = 4GB
+request_disk    = 2GB
 
 queue granule,polygon,descriptor from granule_lists/0test6_GrIS_2021_jakobshavn_small.csv
