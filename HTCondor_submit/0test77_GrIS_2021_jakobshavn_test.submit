@@ -26,4 +26,4 @@ request_cpus    = 1
 request_memory  = 4GB
 request_disk    = 4GB
 
-queue granule,polygon,descriptor from granule_lists/0test77_GrIS_2021_jakobshavn_test.csv
+queue granule,polygon,descriptor from granule_lists/GrIS_2021_jakobshavn_test.csv
