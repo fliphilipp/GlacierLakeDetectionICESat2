@@ -84,12 +84,20 @@ for lake in lake_list:
     figname = args.out_plot_dir + '/%s.jpg' % filename_base
     if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
     
-    # export each lake to pickle (TODO: add .h5 option soon)
-    h5name = args.out_data_dir + '/%s.h5' % filename_base
-    datafile = lake.write_to_hdf5(h5name)
-    print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
-#     pklname = args.out_data_dir + '/%s.pkl' % filename_base
-#     with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
+    # export each lake to h5 and pickle
+    try:
+        h5name = args.out_data_dir + '/%s.h5' % filename_base
+        datafile = lake.write_to_hdf5(h5name)
+        print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
+    except:
+        print('Could not write hdf5 file.')
+        
+    try:
+        pklname = args.out_data_dir + '/%s.pkl' % filename_base
+        with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
+        print('Wrote data file: %s, %s' % (pklname, get_size(pklname)))
+    except:
+        print('Could not write pickle file.')
 
 statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
 with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
@@ -97,6 +105,6 @@ with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stat
 # clean up the input data
 os.remove(input_filename)
 
-print('\n------------------------------------------------')
-print(  '----------->   Python sript done!   <-----------')
-print(  '------------------------------------------------\n')
+print('\n-------------------------------------------------')
+print(  '----------->   Python script done!   <-----------')
+print(  '-------------------------------------------------\n')
