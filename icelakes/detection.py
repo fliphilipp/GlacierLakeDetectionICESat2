@@ -311,7 +311,7 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
                 rel_dens_lower = 1000 if sum_below==0 else signal_rate / (sum_below / width_buff)
                 noise_rate = (dfseg.h.count() - sum_peak) / (dfseg.h.max() - dfseg.h.min() - width_surf*2)
                 snr_surface = signal_rate / noise_rate
-                snr_allabove = signal_rate / noise_rate_all_above
+                snr_allabove = 1000 if noise_rate_all_above == 0 else signal_rate / noise_rate_all_above
 
                 surf_snr[i] = snr_surface
                 upper_snr[i] = rel_dens_upper
@@ -955,8 +955,7 @@ def get_gtx_stats(df_ph, lake_list):
     for lake in lake_list:
         length_lakes += lake.length_water_surfaces
         n_photons_lakes += lake.n_photons_where_water
-    gtx_stats = {'length_total': length_total, 'length_lakes': length_lakes, 
-                 'n_photons_total': n_photons_total, 'n_photons_lakes': n_photons_lakes}
+    gtx_stats = [length_total, length_lakes, n_photons_total, n_photons_lakes]
     return gtx_stats
 
 
@@ -964,6 +963,7 @@ def get_gtx_stats(df_ph, lake_list):
 def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
+    if len(photon_data)==0: return [], [0,0,0,0]
     
     print('\n-----------------------------------------------------------------------------\n')
     print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
@@ -982,7 +982,7 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     # iteratively merge the detected segments into lakes 
     df_lakes = merge_lakes(df_mframe, print_progress=verbose, debug=verbose)
-    if df_lakes is None: return [], {}
+    if df_lakes is None: return [], [0,0,0,0]
     df_lakes = check_lake_surroundings(df_mframe, df_lakes)
     calculate_remaining_densities(df, df_mframe, df_lakes, gtx, ancillary)
     

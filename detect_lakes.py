@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import pickle
 import subprocess
 import icelakes
@@ -45,14 +46,17 @@ gtx_list, ancillary = read_atl03(input_filename, gtxs_to_read='none')
 
 # detect melt lakes
 lake_list = []
-granule_stats = {'length_total': 0.0, 'length_lakes': 0.0, 'n_photons_total': 0, 'n_photons_lakes': 0}
+granule_stats = [0,0,0,0]
 for gtx in gtx_list:
     lakes_found, gtx_stats = detect_lakes(input_filename, gtx, args.polygon, verbose=False)
-    for k in granule_stats.keys(): granule_stats[k] += gtx_stats[k]
+    for i in range(len(granule_stats)): granule_stats[i] += gtx_stats[i]
     lake_list += lakes_found
 
+if granule_stats[0] == 0:
+    print('something went wrong...')
+    sys.exit(4)
 # print stats for granule
-print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i' % tuple(granule_stats.values()))
+print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i' % tuple(granule_stats))
 
 # save plots and lake data dictionaries
 for lake in lake_list:
@@ -67,9 +71,8 @@ for lake in lake_list:
     pklname = args.out_data_dir + '/%s.pkl' % filename_base
     with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
 
-lk = lake_list[0]
-statsfname = args.out_stat_dir + '/stats_%s_%s_%s_%s.csv' % (lk.ice_sheet, lk.melt_season, lk.polygon_name, lk.granule_id[:-4])
-with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(list(granule_stats.values())+[compute_latlon]), file=f)
+statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:], args.granule[:-4])
+with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
     
 # clean up the input data
 os.remove(input_filename)
