@@ -14,6 +14,7 @@ mv detection.py icelakes/
 mv test1 misc/
 mv test2 misc/
 mv *.geojson geojsons/
+rm success.txt
 
 # Run the Python script 
 python3 detect_lakes.py --granule $1 --polygon $2
@@ -22,7 +23,7 @@ if [ -f "success.txt" ]; then
     echo "Success!!!!!"
     exit 69
 else
-    echo "$1" >>$_CONDOR_WRAPPER_ERROR_FILE
     echo "No succes....."
+    echo "$1" > $_CONDOR_WRAPPER_ERROR_FILE
     exit 127
 fi

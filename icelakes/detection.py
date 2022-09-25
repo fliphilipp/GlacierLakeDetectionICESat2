@@ -982,7 +982,8 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     # iteratively merge the detected segments into lakes 
     df_lakes = merge_lakes(df_mframe, print_progress=verbose, debug=verbose)
-    if df_lakes is None: return [], [0,0,0,0]
+    if df_lakes is None: 
+        return [], [df.xatc.max()-df.xatc.min(), 0.0, df.h.count(), 0]
     df_lakes = check_lake_surroundings(df_mframe, df_lakes)
     calculate_remaining_densities(df, df_mframe, df_lakes, gtx, ancillary)
     
@@ -1441,3 +1442,88 @@ class melt_lake:
             plt.close(fig)
 
             return fig
+    
+    #-------------------------------------------------------------------------------------
+    def write_to_hdf5(self, filename):
+        with h5py.File(filename, 'w') as f:
+            comp="gzip"
+            phdat = f.create_group('photon_data')
+            phdat.create_dataset('lon', data=self.photon_data.lon, dtype='f8', compression=comp)
+            phdat.create_dataset('lat', data=self.photon_data.lat, dtype='f8', compression=comp)
+            phdat.create_dataset('xatc', data=self.photon_data.xatc, dtype='f8', compression=comp)
+            phdat.create_dataset('h', data=self.photon_data.h, dtype='f8', compression=comp)
+            phdat.create_dataset('geoid', data=self.photon_data.geoid, dtype='f8', compression=comp)
+            phdat.create_dataset('snr', data=self.photon_data.snr, dtype='f8', compression=comp)
+            phdat.create_dataset('mframe', data=self.photon_data.mframe, dtype='uint32', compression=comp)
+            phdat.create_dataset('ph_id_pulse', data=self.photon_data.ph_id_pulse, dtype='uint8', compression=comp)
+
+            mfdat = f.create_group('mframe_data')
+            mfdat.create_dataset('mframe', data=self.mframe_data.index, dtype='uint32', compression=comp)
+            mfdat.create_dataset('lon', data=self.mframe_data.lon, dtype='f8', compression=comp)
+            mfdat.create_dataset('lat', data=self.mframe_data.lat, dtype='f8', compression=comp)
+            mfdat.create_dataset('xatc', data=self.mframe_data.xatc, dtype='f8', compression=comp)
+            mfdat.create_dataset('dt', data=self.mframe_data.dt, dtype='f8', compression=comp)
+            mfdat.create_dataset('xatc_min', data=self.mframe_data.xatc_min, dtype='f8', compression=comp)
+            mfdat.create_dataset('xatc_max', data=self.mframe_data.xatc_max, dtype='f8', compression=comp)
+            mfdat.create_dataset('n_phot', data=self.mframe_data.n_phot, dtype='uint32', compression=comp)
+            mfdat.create_dataset('peak', data=self.mframe_data.peak, dtype='uint32', compression=comp)
+            mfdat.create_dataset('is_flat', data=self.mframe_data.is_flat, dtype='bool_', compression=comp)
+            mfdat.create_dataset('lake_qual_pass', data=self.mframe_data.lake_qual_pass, dtype='bool_', compression=comp)
+            mfdat.create_dataset('quality_summary', data=self.mframe_data.quality_summary, dtype='bool_', compression=comp)
+            mfdat.create_dataset('snr_surf', data=self.mframe_data.snr_surf, dtype='f8', compression=comp)
+            mfdat.create_dataset('snr_upper', data=self.mframe_data.snr_upper, dtype='f8', compression=comp)
+            mfdat.create_dataset('snr_lower', data=self.mframe_data.snr_lower, dtype='f8', compression=comp)
+            mfdat.create_dataset('snr_allabove', data=self.mframe_data.snr_allabove, dtype='f8', compression=comp)
+            mfdat.create_dataset('ratio_2nd_returns', data=self.mframe_data.ratio_2nd_returns, dtype='f8', compression=comp)
+            mfdat.create_dataset('quality_secondreturns', data=self.mframe_data.quality_secondreturns, dtype='f8', compression=comp)
+            mfdat.create_dataset('alignment_penalty', data=self.mframe_data.alignment_penalty, dtype='f8', compression=comp)
+            mfdat.create_dataset('range_penalty', data=self.mframe_data.range_penalty, dtype='f8', compression=comp)
+            mfdat.create_dataset('length_penalty', data=self.mframe_data.length_penalty, dtype='f8', compression=comp)
+
+            scnds = f.create_group('detection_2nd_returns')
+            scnds.create_dataset('h', data=self.detection_2nd_returns['h'], dtype='f8', compression=comp)
+            scnds.create_dataset('xatc', data=self.detection_2nd_returns['xatc'], dtype='f8', compression=comp)
+            scnds.create_dataset('prom', data=self.detection_2nd_returns['prom'], dtype='f8', compression=comp)
+
+            dqinf = f.create_group('detection_quality_info')
+            for k in self.detection_quality_info.keys():
+                dqinf.create_dataset(k, data=self.detection_quality_info[k], dtype='f8')
+
+            props = f.create_group('properties')
+            props.create_dataset('mframe_start', data=self.mframe_start, dtype='uint32')
+            props.create_dataset('mframe_end', data=self.mframe_end, dtype='uint32')
+            props.create_dataset('main_peak', data=self.main_peak, dtype='f8')
+            props.create_dataset('n_subsegs_per_mframe', data=self.n_subsegs_per_mframe, dtype='uint8')
+            props.create_dataset('len_subsegs', data=self.len_subsegs, dtype='f8')
+            props.create_dataset('surface_extent_detection', data=[x for y in self.surface_extent_detection for x in y], dtype='f8')
+            props.create_dataset('lat_surface_extent_detection', data=[x for y in self.lat_surface_extent_detection for x in y], dtype='f8')
+            props.create_dataset('length_extent', data=self.length_extent, dtype='f8')
+            props.create_dataset('full_lat_extent_detection', data=self.full_lat_extent_detection, dtype='f8')
+            props.create_dataset('lat_min', data=self.lat_min, dtype='f8')
+            props.create_dataset('lat_max', data=self.lat_max, dtype='f8')
+            props.create_dataset('lat', data=self.lat, dtype='f8')
+            props.create_dataset('lat_str', data=self.lat_str)
+            props.create_dataset('lon_min', data=self.lon_min, dtype='f8')
+            props.create_dataset('lon_max', data=self.lon_max, dtype='f8')
+            props.create_dataset('lon', data=self.lon, dtype='f8')
+            props.create_dataset('lon_str', data=self.lon_str)
+            props.create_dataset('beam_number', data=self.beam_number, dtype='uint8')
+            props.create_dataset('beam_strength', data=self.beam_strength)
+            props.create_dataset('cycle_number', data=self.cycle_number, dtype='uint8')
+            props.create_dataset('sc_orient', data=self.sc_orient)
+            props.create_dataset('dead_time', data=self.dead_time, dtype='f8')
+            props.create_dataset('dead_time_meters', data=self.dead_time_meters, dtype='f8')
+            props.create_dataset('polygon_filename', data=self.polygon_filename)
+            props.create_dataset('polygon_name', data=self.polygon_name)
+            props.create_dataset('length_water_surfaces', data=self.length_water_surfaces, dtype='f8')
+            props.create_dataset('n_photons_where_water', data=self.n_photons_where_water, dtype='int32')
+            props.create_dataset('detection_quality', data=self.detection_quality, dtype='f8')
+            props.create_dataset('surface_elevation', data=self.surface_elevation, dtype='f8')
+            props.create_dataset('oaurl', data=self.oaurl)
+            props.create_dataset('gtx', data=self.gtx)
+            props.create_dataset('rgt', data=self.rgt, dtype='uint16')
+            props.create_dataset('granule_id', data=self.granule_id, dtype='S39')
+            props.create_dataset('melt_season', data=self.melt_season)
+            props.create_dataset('ice_sheet', data=self.ice_sheet)
+        return filename
+

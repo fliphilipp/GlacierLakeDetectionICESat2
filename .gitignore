@@ -21,4 +21,4 @@ figs_afterpulses/
 shapefiles/
 detection_out_stat/stats*.csv
 0
-
+success.txt

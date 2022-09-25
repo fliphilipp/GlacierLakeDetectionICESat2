@@ -4,7 +4,7 @@ import sys
 import pickle
 import subprocess
 import icelakes
-from icelakes.utilities import encedc, decedc
+from icelakes.utilities import encedc, decedc, get_size
 from icelakes.nsidc import download_granule, edc
 from icelakes.detection import read_atl03, detect_lakes, melt_lake
 
@@ -40,7 +40,23 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
     if not os.path.exists(thispath): os.makedirs(thispath)
 
 # download the specified ICESat-2 data from NSIDC
-input_filename = download_granule(args.granule, args.download_gtxs, args.polygon, args.is2_data_dir, decedc(edc().u), decedc(edc().p))
+input_filename, request_status_code = download_granule(args.granule, args.download_gtxs, args.polygon, args.is2_data_dir, 
+                                             decedc(edc().u), decedc(edc().p))
+
+# perform a bunch of checks to make sure everything went alright with the nsidc api
+print('Request status code:', request_status_code, request_status_code==200)
+if request_status_code != 200:
+    print('NSIDC API request failed.')
+    sys.exit(127)
+if request_status_code==200:
+    with open('success.txt', 'w') as f: print('we got some sweet data', file=f)
+    if input_filename == 'none': 
+        print('granule seems to be empty. nothing more to do here.') 
+        sys.exit(69)
+if os.path.exists(input_filename):
+    if os.path.getsize(input_filename) < 31457280:# 30 MB
+        print('granule seems to be empty. nothing more to do here.') 
+        sys.exit(69)
 
 gtx_list, ancillary = read_atl03(input_filename, gtxs_to_read='none')
 
@@ -55,10 +71,9 @@ for gtx in gtx_list:
 if granule_stats[0] > 0:
     with open('success.txt', 'w') as f: print('we got some data from NSIDC!!', file=f)
     print('Sucessfully retrieved data from NSIDC!!')
-    #sys.exit(4)
     
 # print stats for granule
-print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i' % tuple(granule_stats))
+print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
 
 # save plots and lake data dictionaries
 for lake in lake_list:
@@ -70,10 +85,13 @@ for lake in lake_list:
     if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
     
     # export each lake to pickle (TODO: add .h5 option soon)
-    pklname = args.out_data_dir + '/%s.pkl' % filename_base
-    with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
+    h5name = args.out_data_dir + '/%s.h5' % filename_base
+    datafile = lake.write_to_hdf5(h5name)
+    print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
+#     pklname = args.out_data_dir + '/%s.pkl' % filename_base
+#     with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
 
-statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:], args.granule[:-4])
+statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
 with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
     
 # clean up the input data

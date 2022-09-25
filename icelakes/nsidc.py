@@ -248,6 +248,9 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         search_params['page_num'] += 1
 
     print('\nDownloading ICESat-2 data. Found granules:')
+    if len(granules) == 0:
+        print('None')
+        return 'none', 404
     for result in granules:
         print('  '+result['producer_granule_id'], f', {float(result["granule_size"]):.2f} MB',sep='')
         
@@ -386,10 +389,15 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     
     filelist = [granule_output_path+'/'+f for f in os.listdir(granule_output_path) \
                 if os.path.isfile(os.path.join(granule_output_path, f)) & (granule_id in f)]
-    filename = filelist[0]
+    
+    if len(filelist) == 0: 
+        return 'none'
+    else:
+        filename = filelist[0]
     print('File to process: %s (%s)' % (filename, get_size(filename)))
     
-    return filename
+    print(filename, 'status:', request.status_code)
+    return filename, request.status_code
 
 
 ##########################################################################################
