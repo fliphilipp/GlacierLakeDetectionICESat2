@@ -53,7 +53,7 @@ for gtx in gtx_list:
     lake_list += lakes_found
 
 if granule_stats[0] > 0:
-    with open('success.txt', 'w') as f: print('we got some data from NSICD!!', file=f)
+    with open('success.txt', 'w') as f: print('we got some data from NSIDC!!', file=f)
     print('Sucessfully retrieved data from NSIDC!!')
     #sys.exit(4)
     

@@ -20,9 +20,9 @@ python3 detect_lakes.py --granule $1 --polygon $2
 
 if [ -f "success.txt" ]; then
     echo "Success!!!!!"
-    exit 0
+    exit 69
 else
     echo "$1" >>$_CONDOR_WRAPPER_ERROR_FILE
     echo "No succes....."
-    exit 4
+    exit 127
 fi
