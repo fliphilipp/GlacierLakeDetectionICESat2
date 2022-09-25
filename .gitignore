@@ -19,3 +19,4 @@ random_testing.ipynb
 figs_random/
 figs_afterpulses/
 shapefiles/
+detection_out_stat/stats*.csv

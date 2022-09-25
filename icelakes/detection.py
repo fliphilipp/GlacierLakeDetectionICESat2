@@ -16,7 +16,7 @@ pd.set_option('mode.chained_assignment', 'raise')
 
 
 ##########################################################################################
-def read_atl03(filename, geoid_h=True):
+def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
     """
     Read in an ATL03 granule. 
 
@@ -72,7 +72,15 @@ def read_atl03(filename, geoid_h=True):
     # make dictionaries for beam data to be stored in
     dfs = {}
     dfs_bckgrd = {}
-    beamlist = [x for x in list(f.keys()) if 'gt' in x]
+    beams_available = [x for x in list(f.keys()) if 'gt' in x]
+    if gtxs_to_read=='all':
+        beamlist = beams_available
+    elif gtxs_to_read=='none':
+        beamlist = []
+    else:
+        if type(gtxs_to_read)==list: beamlist = gtxs_to_read
+        elif type(gtxs_to_read)==str: beamlist = [gtxs_to_read]
+        else: beamlist = beams_available
     
     conf_landice = 3 # index for the land ice confidence
     
@@ -138,10 +146,10 @@ def read_atl03(filename, geoid_h=True):
                                'qual': np.array(f[beam]['heights']['quality_ph'])}) 
                                # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
 
-            df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
-                                      'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
-                                      'bckgrd_int_height': np.array(f[beam]['bckgrd_atlas']['bckgrd_int_height']),
-                                      'delta_time': np.array(f[beam]['bckgrd_atlas']['delta_time'])})
+#             df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
+#                                       'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
+#                                       'bckgrd_int_height': np.array(f[beam]['bckgrd_atlas']['bckgrd_int_height']),
+#                                       'delta_time': np.array(f[beam]['bckgrd_atlas']['delta_time'])})
 
             #### calculate along-track distances [meters from the equator crossing] from segment-level data
             df['xatc'] = np.full_like(df.lat, fill_value=np.nan)
@@ -179,7 +187,7 @@ def read_atl03(filename, geoid_h=True):
 
             #### save to list of dataframes
             dfs[beam] = df
-            dfs_bckgrd[beam] = df_bckgrd
+            #Mdfs_bckgrd[beam] = df_bckgrd
         
         except:
             print('Error for {f:s} on {b:s} ... skipping:'.format(f=filename, b=beam))
@@ -187,7 +195,10 @@ def read_atl03(filename, geoid_h=True):
             
     f.close()
     print(' --> done.')
-    return dfs, dfs_bckgrd, ancillary
+    if len(beamlist)==0:
+        return beams_available, ancillary
+    else:
+        return beams_available, ancillary, dfs
 
 ##########################################################################################
 def make_mframe_df(df):
@@ -864,7 +875,7 @@ def print_results(lake_list, gtx):
         traceback.print_exc()
 
             
-#-------------------------------------------------------------------------------------------------------------
+##########################################################################################
 def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=False):
     
     def ranges_overlap(range1, range2):
@@ -936,8 +947,24 @@ def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon
 
 
 ##########################################################################################
-def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
-               
+def get_gtx_stats(df_ph, lake_list):
+    n_photons_total = df_ph.h.count()
+    length_total = df_ph.xatc.max() - df_ph.xatc.min()
+    n_photons_lakes = 0.0
+    length_lakes = 0.0
+    for lake in lake_list:
+        length_lakes += lake.length_water_surfaces
+        n_photons_lakes += lake.n_photons_where_water
+    gtx_stats = {'length_total': length_total, 'length_lakes': length_lakes, 
+                 'n_photons_total': n_photons_total, 'n_photons_lakes': n_photons_lakes}
+    return gtx_stats
+
+
+##########################################################################################
+def detect_lakes(input_filename, gtx, polygon, verbose=False):
+    
+    gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
+    
     print('\n-----------------------------------------------------------------------------\n')
     print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
 
@@ -952,12 +979,14 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
     # calculate densities and find second peaks (where surface is flat)
     nsubsegs = 10
     get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, n_subsegs=nsubsegs, print_results=verbose)
-               
+    
+    # iteratively merge the detected segments into lakes 
     df_lakes = merge_lakes(df_mframe, print_progress=verbose, debug=verbose)
     if df_lakes is None: return []
     df_lakes = check_lake_surroundings(df_mframe, df_lakes)
     calculate_remaining_densities(df, df_mframe, df_lakes, gtx, ancillary)
     
+    # create a list of lake object, and calculate some stats for each
     thelakes = []
     if df_lakes is not None:
         for i in range(len(df_lakes)):
@@ -969,11 +998,14 @@ def detect_lakes(photon_data, gtx, ancillary, polygon, verbose=False):
             thislake.calc_quality_lake()
             thelakes.append(thislake)
     
-    thelakes = remove_duplicate_lakes(thelakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=verbose)
-               
+    # remove any duplicates and make sure data segments don't overlap into other lakes' water surfaces
+    thelakes = remove_duplicate_lakes(thelakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=verbose)          
     print_results(thelakes, gtx)
     
-    return thelakes
+    # get gtx stats
+    gtx_stats = get_gtx_stats(df, thelakes)
+    
+    return thelakes, gtx_stats
 
 
 ##########################################################################################
@@ -1118,7 +1150,17 @@ class melt_lake:
                 current_list = []
             i += 1
         self.surface_extent_detection = surface_segs
-                      
+        
+        # get length extent of water surface, and of the entire lake
+        length_water_surfaces = 0.0
+        n_photons_where_water = 0
+        for xt in surface_segs:
+            xtmin = np.min(xt)
+            xtmax = np.max(xt)
+            length_water_surfaces += (xtmax - xtmin)
+            n_photons_where_water += np.sum((self.photon_data.xatc > xtmin) & (self.photon_data.xatc < xtmax))
+        self.length_water_surfaces = length_water_surfaces
+        self.n_photons_where_water = n_photons_where_water
         self.length_extent = 0.0 if len(surface_segs)<1 else np.abs(surface_segs[0][0]-surface_segs[-1][-1])
         
         # get surface extent in lats also
@@ -1148,7 +1190,7 @@ class melt_lake:
         
         
     #-------------------------------------------------------------------------------------
-    def calc_quality_lake(self, min_2nd_returns=10, len_qual_limit=1000.0, depth_qual_limit=7.0, h_range_limit=2.0,
+    def calc_quality_lake(self, min_2nd_returns=5, len_qual_limit=1000.0, depth_qual_limit=7.0, h_range_limit=2.0,
                       depth_determination_percentile=70, verbose=False):
 
         total_quality = 0.0
