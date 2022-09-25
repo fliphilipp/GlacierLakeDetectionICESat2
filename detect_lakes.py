@@ -91,13 +91,12 @@ for lake in lake_list:
         print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
     except:
         print('Could not write hdf5 file.')
-        
-    try:
-        pklname = args.out_data_dir + '/%s.pkl' % filename_base
-        with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
-        print('Wrote data file: %s, %s' % (pklname, get_size(pklname)))
-    except:
-        print('Could not write pickle file.')
+        try:
+            pklname = args.out_data_dir + '/%s.pkl' % filename_base
+            with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
+            print('Wrote data file: %s, %s' % (pklname, get_size(pklname)))
+        except:
+            print('Could not write pickle file.')
 
 statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
 with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
