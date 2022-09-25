@@ -9,7 +9,7 @@ executable  = run_py.sh
 
 arguments = $(granule) $(polygon)
 
-max_retries = 3
+max_retries = 5
 
 transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon), wn-geoip.tar.gz, location-wrapper.sh
 

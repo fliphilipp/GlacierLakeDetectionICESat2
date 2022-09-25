@@ -54,7 +54,8 @@ for gtx in gtx_list:
 
 if granule_stats[0] == 0:
     print('something went wrong...')
-    sys.exit(4)
+    #sys.exit(4)
+    
 # print stats for granule
 print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i' % tuple(granule_stats))
 
@@ -77,6 +78,6 @@ with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stat
 # clean up the input data
 os.remove(input_filename)
 
-print('\n--------------------------------------')
-print('----------->   SUCCESS!   <-----------')
-print('--------------------------------------\n')
+print('\n------------------------------------------------')
+print(  '----------->   Python sript done!   <-----------')
+print(  '------------------------------------------------\n')

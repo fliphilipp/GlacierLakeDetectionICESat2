@@ -20,7 +20,10 @@ python3 detect_lakes.py --granule $1 --polygon $2
 
 if (ls detection_out_stat | wc -l) > 0
 then
+    echo "Success!!!"
     exit 0
 else
+    echo "$1" >>$_CONDOR_WRAPPER_ERROR_FILE
+    echo "Looks like something went wrong....."
     exit 4
 fi
