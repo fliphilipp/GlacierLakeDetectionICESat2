@@ -52,9 +52,9 @@ for gtx in gtx_list:
     for i in range(len(granule_stats)): granule_stats[i] += gtx_stats[i]
     lake_list += lakes_found
 
-if granule_stats[0] == 0:
-    with open('error.txt', 'w') as f: print('oh sh*t.', file=f)
-    print('Error: No data retrieved from NSIDC.')
+if granule_stats[0] > 0:
+    with open('success.txt', 'w') as f: print('we got some data from NSICD!!', file=f)
+    print('Sucessfully retrieved data from NSIDC!!')
     #sys.exit(4)
     
 # print stats for granule
