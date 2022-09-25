@@ -18,12 +18,11 @@ mv *.geojson geojsons/
 # Run the Python script 
 python3 detect_lakes.py --granule $1 --polygon $2
 
-if (ls detection_out_stat | wc -l) > 0
-then
+if [ -f "error.txt" ]; then
+    echo "$1" >>$_CONDOR_WRAPPER_ERROR_FILE
+    echo "No succes....."
+    exit 4
+else
     echo "Success!!!"
     exit 0
-else
-    echo "$1" >>$_CONDOR_WRAPPER_ERROR_FILE
-    echo "Looks like something went wrong....."
-    exit 4
 fi

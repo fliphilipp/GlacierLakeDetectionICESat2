@@ -53,8 +53,8 @@ for gtx in gtx_list:
     lake_list += lakes_found
 
 if granule_stats[0] == 0:
-    print('something went wrong...')
-    blah = 1/0
+    with open('error.txt', 'w') as f: print('oh sh*t.', file=f)
+    print('Error: No data retrieved from NSIDC.')
     #sys.exit(4)
     
 # print stats for granule
