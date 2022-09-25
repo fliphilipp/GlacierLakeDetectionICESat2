@@ -78,7 +78,7 @@ print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes
 # save plots and lake data dictionaries
 for lake in lake_list:
     filename_base = 'lake_%05i_%s_%s_%s_%s_%s' % ((1.0-lake.detection_quality)*10000, lake.ice_sheet, lake.melt_season, 
-                                                  lake.polygon_name, lake.granule_id[:-4], lake.gtx)
+                                                  lake.polygon_name, lake.granule_id[:-3], lake.gtx)
     # plot each lake and save to image
     fig = lake.plot_detected(min_width=0.0, min_depth=0.0);
     figname = args.out_plot_dir + '/%s.jpg' % filename_base
