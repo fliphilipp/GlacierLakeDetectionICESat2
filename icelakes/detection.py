@@ -526,7 +526,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
 
                                     # classify as second peak only if elevation is 1.1m lower than main peak (surface) 
                                     # and higher than 50m below surface
-                                    if (secondpeak_h < (peak_loc2-1.1)) & (secondpeak_h > (peak_loc2-50.0)):
+                                    if (secondpeak_h < (peak_loc2-0.6)) & (secondpeak_h > (peak_loc2-50.0)):
                                         secondpeak_xtac = subsegstart + subsegwidth/2
                                         n_2nd_returns += 1
                                         prominences.append(prominence_secondpeak)

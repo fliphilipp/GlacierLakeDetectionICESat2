@@ -26,7 +26,7 @@ if [ -f "success.txt" ]; then
     echo "Success!!!!!"
     exit 69
 else
-    echo "No succes....."
+    echo "No success....."
     echo "$1" > $_CONDOR_WRAPPER_ERROR_FILE
     exit 127
 fi
