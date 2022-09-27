@@ -16,6 +16,9 @@ mv test2 misc/
 mv *.geojson geojsons/
 rm success.txt
 
+# just to not send API requests to NSDIC at once
+sleep $((RANDOM % 180))
+
 # Run the Python script 
 python3 detect_lakes.py --granule $1 --polygon $2
 
