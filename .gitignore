@@ -23,3 +23,5 @@ detection_out_stat/stats*.csv
 0
 success.txt
 failed_jobs/
+granule_stats/
+zzz*

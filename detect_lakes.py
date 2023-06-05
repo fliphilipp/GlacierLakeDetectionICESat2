@@ -102,7 +102,7 @@ statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon
 with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
     
 # clean up the input data
-os.remove(input_filename)
+# os.remove(input_filename)
 
 print('\n-------------------------------------------------')
 print(  '----------->   Python script done!   <-----------')

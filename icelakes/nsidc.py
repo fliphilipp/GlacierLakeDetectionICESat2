@@ -86,7 +86,7 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
 
     short_name = 'ATL03'
     start_time = '00:00:00'
-    end_time = '00:00:00'
+    end_time = '23:59:59'
     temporal = start_date + 'T' + start_time + 'Z' + ',' + end_date + 'T' + end_time + 'Z'
 
     cmr_collections_url = 'https://cmr.earthdata.nasa.gov/search/collections.json'
@@ -125,10 +125,10 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
         granules.extend(results['feed']['entry'])
         search_params['page_num'] += 1
 
-    print('Found %i %s version %s granules over %s between %s and %s.' % (len(granules), short_name, latest_version, 
+    granule_list = np.unique(np.array([g['producer_granule_id'] for g in granules]))
+    
+    print('Found %i %s version %s granules over %s between %s and %s.' % (len(granule_list), short_name, latest_version, 
                                                                           geojson, start_date, end_date))
-
-    granule_list = [g['producer_granule_id'] for g in granules]
     description = [icesheet + '_' + meltseason + '_' + geojson.replace('.geojson','')] * len(granule_list)
     if geojson_dir_remote is None:
         geojson_remote = geojson_dir_local + geojson
@@ -213,6 +213,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                     '/gtx/heights/delta_time',
                     '/gtx/heights/pce_mframe_cnt',
                     '/gtx/heights/ph_id_pulse',
+                    '/gtx/heights/signal_conf_ph',
                     '/gtx/heights/quality_ph',
                     '/ancillary_data/calibrations/dead_time/gtx']
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
@@ -246,7 +247,9 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         # Collect results and increment page_num
         granules.extend(results['feed']['entry'])
         search_params['page_num'] += 1
-
+        
+    granule_list, idx_unique = np.unique(np.array([g['producer_granule_id'] for g in granules]), return_index=True)
+    granules = granules[idx_unique]
     print('\nDownloading ICESat-2 data. Found granules:')
     if len(granules) == 0:
         print('None')

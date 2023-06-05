@@ -157,7 +157,6 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
             segment_dist_x = np.array(f[beam]['geolocation']['segment_dist_x'])
             segment_length = np.array(f[beam]['geolocation']['segment_length'])
             valid = ph_index_beg>=0 # need to delete values where there's no photons in the segment (-1 value)
-
             df.loc[ph_index_beg[valid], 'xatc'] = segment_dist_x[valid]
             df.xatc.fillna(method='ffill',inplace=True)
             df.xatc += np.array(f[beam]['heights']['dist_ph_along'])
@@ -524,7 +523,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                                     idx_2ndreturn = np.argmax(peak_props['prominences'])
                                     secondpeak_h = mid_subseg_snr[peaks[idx_2ndreturn]]
 
-                                    # classify as second peak only if elevation is 1.1m lower than main peak (surface) 
+                                    # classify as second peak only if elevation is 0.6m lower than main peak (surface) 
                                     # and higher than 50m below surface
                                     if (secondpeak_h < (peak_loc2-0.6)) & (secondpeak_h > (peak_loc2-50.0)):
                                         secondpeak_xtac = subsegstart + subsegwidth/2
