@@ -145,6 +145,8 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
                                'ph_id_pulse': np.array(f[beam]['heights']['ph_id_pulse']),
                                'qual': np.array(f[beam]['heights']['quality_ph'])}) 
                                # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
+            if 'weight_ph' in f[beam]['heights'].keys():
+                df['weight_ph'] = np.array(f[beam]['heights']['weight_ph'])
 
 #             df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
 #                                       'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
@@ -237,6 +239,14 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
                             min_phot=30, min_snr_surface=10, min_snr_vs_all_above=100):
     
     print('---> finding flat surfaces in photon data', end=' ')
+
+    df['snr'] = 0.0
+    df['is_afterpulse'] = False
+    df['prob_afterpulse'] = 0.0
+    df['sat_ratio'] = 0.0
+    df['sat_ratio_smooth'] = 0.0
+    df['sat_elev'] = np.nan
+    df['pulseid'] = 1000*df.mframe.astype(np.uint64)+df.ph_id_pulse.astype(np.uint64)
     
     # initialize arrays for major-frame-level photon stats
     peak_locs = np.full(len(df_mframe), np.nan, dtype=np.double)
@@ -343,22 +353,147 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
 
 
 ##########################################################################################
+def get_saturation_and_elevation(hvals, num_channels, dead_time):
+    speed_of_light = 299792458 #m/s
+    hvals = np.flip(np.sort(np.array(hvals).flatten()))
+    if len(hvals) < num_channels:
+        return pd.Series({'elev_saturation': np.nan, 'ratio_saturation': 0.0})
+    else:
+        diffs = np.abs(hvals[num_channels-1:] - hvals[:-num_channels+1])
+        diff_threshold_saturated = dead_time * speed_of_light / 2.0
+        diff_means_saturated = diffs <= diff_threshold_saturated
+        if np.sum(diff_means_saturated) > 1:
+            first_saturated_idx = next(i for i,val in enumerate(diffs) if val <= diff_threshold_saturated*1.0)
+            first_saturated_elev = hvals[first_saturated_idx+num_channels-1]
+            hvals = hvals[hvals > (first_saturated_elev - diff_threshold_saturated/2)]
+            diffs = np.abs(hvals[num_channels-1:] - hvals[:-num_channels+1])
+        start_saturated = np.argmin(diffs)
+        end_saturated = start_saturated+num_channels
+        hvals_saturated = hvals[start_saturated:end_saturated]
+        elev_saturated = np.mean(hvals_saturated)
+        # ratio_saturated = diff_threshold_saturated / (np.max(hvals_saturated)-np.min(hvals_saturated))
+        ratio_saturated = diff_threshold_saturated / (4.0*np.std(hvals_saturated))
+        
+        return pd.Series({'elev_saturation': elev_saturated, 'ratio_saturation': ratio_saturated})
+
+
+##########################################################################################
 def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.2, n_subsegs=10,
                                 bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
     
-    print('---> calculating photon densities & looking for second density peaks below the surface')
+    print('---> removing afterpulses, calculating photon densities & looking for second density peaks below the surface')
     
     # somehow got duplicate indices (mframe values in index) in here
     # this shouldn't be the case because index was created using groupby on mframe 
     # below is a temporary fix ---> check out more what's wrong here
     df_mframe_selected = df_selected.copy()
     df_mframe_selected.drop_duplicates(subset=['xatc_min','xatc_max'], keep='first', inplace=True)
-    df['specular'] = False
-    
+
+    # remove afterpulses
+    beam_strength = ancillary['gtx_strength_dict'][gtx]
+    deadtime = ancillary['gtx_dead_time_dict'][gtx]
+    n_channels = 4 if beam_strength == 'weak' else 16
+    peak_target_elevs = [-0.56, -0.93, -1.47, -1.85, -2.44, -4.25]
+    widths_pk = [0.3, 0.225, 0.225, 0.225, 0.35, 0.3]
+    diff_pk_tols = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2]
+    rem_thresh_strong = [0.6, 2.7, 5.0, 30.0, 1.0, 1.0]
+    rem_thresh_weak = [0.6, 4.0, 5.0, 15.0, 1.0, 1.0]
+    range_full_removal = 0.05
+    saturation_threshold = 1.0
+
     for mframe in df_mframe_selected.index:
         if np.sum(df.mframe == mframe) > 50:
             try:
                 selector_segment = (df.mframe == mframe)
+                dfseg = df[selector_segment].copy()
+                dfseg['ph_index'] = dfseg.index
+                dfseg = dfseg.set_index('pulseid')
+                thegroup = dfseg.groupby('pulseid')
+                df_grouped = thegroup[['xatc', 'lat', 'lon']].mean()
+                kwargs = {'num_channels': n_channels, 'dead_time': deadtime}
+                saturation_fraction_and_elevation = thegroup[['h']].apply(get_saturation_and_elevation, **kwargs)
+                df_grouped = pd.concat([df_grouped, saturation_fraction_and_elevation], axis=1)
+                speed_of_light = 299792458 #m/s
+                diff_threshold_saturated = deadtime * speed_of_light / 2.0
+                df_grouped['is_saturated'] = df_grouped.ratio_saturation >= saturation_threshold
+                ratio_saturation_smooth = df_grouped.ratio_saturation.rolling(5, center=True, min_periods=1).mean()
+                df_grouped['ratio_saturation_smooth'] = np.max(np.vstack((ratio_saturation_smooth, df_grouped.ratio_saturation)), axis=0)
+                varlist = ['ratio_saturation', 'ratio_saturation_smooth', 'elev_saturation', 'is_saturated']
+                df_join = dfseg.join(df_grouped[varlist], on='pulseid', how='left')
+                df_join['h_relative_to_saturated_peak'] = df_join.h - df_join.elev_saturation
+                df_join['h_rel_to_sat'] = df_join.h - df_join.elev_saturation
+
+                if np.sum(df_join.is_saturated) > 100:
+                    bin_h = 0.01
+                    smooth_h_top = 0.08
+                    smooth_h_middle = 0.15
+                    smooth_h_bottom = 0.3
+                    switch1 = -1.2
+                    switch2 = -2.1
+                    bins = np.arange(-5, 0.5+bin_h, bin_h)
+                    mids = bins[:-1] + 0.5*bin_h
+                    smooth_top = int(np.round(smooth_h_top/bin_h))
+                    smooth_middle = int(np.round(smooth_h_middle/bin_h))
+                    smooth_bottom = int(np.round(smooth_h_bottom/bin_h))
+                    # histweights = df_join.ratio_saturation_smooth*df_join.snr
+                    histweights = df_join.ratio_saturation_smooth
+                    hist_h = np.histogram(df_join.h_rel_to_sat, bins=bins, weights=histweights)
+                    hist_h_smooth_top = np.array(pd.Series(hist_h[0]).rolling(smooth_top,center=True,min_periods=1).mean())
+                    hist_h_smooth_middle = np.array(pd.Series(hist_h[0]).rolling(smooth_middle,center=True,min_periods=1).mean())
+                    hist_h_smooth_bottom = np.array(pd.Series(hist_h[0]).rolling(smooth_bottom,center=True,min_periods=1).mean())
+                    seg1 = hist_h_smooth_bottom[mids<=switch2]
+                    seg2 = hist_h_smooth_middle[(mids>switch2) & (mids<=switch1)]
+                    seg3 = hist_h_smooth_top[mids>switch1]
+                    hist_h_smooth = np.concatenate((seg1, seg2, seg3))
+                    hist_h_plot_smooth = np.log(hist_h_smooth+1)
+                    hist_h_plot_smooth /= hist_h_plot_smooth.max()
+            
+                    hist_peakfind = hist_h_plot_smooth[mids<=-0.35]
+                    mids_peakfind = mids[mids<=-0.35]
+                    peaks, props = find_peaks(hist_peakfind, distance=int(np.round(0.1/bin_h)), prominence=0.01)
+                    props['idx'] = peaks
+                    props['elev'] = np.round(mids_peakfind[peaks],2)
+                    props['height'] = hist_peakfind[peaks]
+                    df_sat = pd.DataFrame(props)
+                    df_sat.reset_index(drop=True, inplace=True)
+                    df_sat.sort_values(by='prominences', ascending=False, ignore_index=True, inplace=True)
+                    if len(df_sat) > 7:
+                        df_sat = df_sat.iloc[:7]
+                    df_sat.sort_values(by='elev', ascending=False, ignore_index=True, inplace=True)
+            
+                    for i, pk in enumerate(peak_target_elevs):
+                        diffs = np.abs(df_sat.elev - pk)
+                        mindiff = np.min(diffs)
+                        if mindiff < diff_pk_tols[i]:
+                            thispk = df_sat.iloc[np.argmin(diffs)].elev
+                            sel = (df_join.h_rel_to_sat > (thispk-widths_pk[i])) & (df_join.h_rel_to_sat < (thispk+widths_pk[i]))
+                            dfpk = df_join[sel].copy()
+                            thisthresh = rem_thresh_strong[i] if beam_strength == 'strong' else rem_thresh_weak[i]
+                            thresh_factor = (dfpk.ratio_saturation_smooth >= thisthresh) * 0.6
+                            if i > 3: thresh_factor *= 0.75
+                            prob = thresh_factor * dfpk.ratio_saturation_smooth 
+                            prob *= (1-np.abs(1/widths_pk[i]*(dfpk.h_rel_to_sat-thispk))**2)**3
+                            prob = np.clip(prob, 0, 1)
+                            prob *=  np.clip(widths_pk[i]/(widths_pk[i]-range_full_removal) - mindiff/(widths_pk[i]-range_full_removal), 0, 1)
+                            dfpk['prob_rem'] = prob
+                            df_join.loc[sel, 'prob_afterpulse'] += dfpk.prob_rem
+
+                    df_join['is_afterpulse'] = df_join.prob_afterpulse > np.random.uniform(0,1,len(df_join))
+                            
+                    df.loc[selector_segment, 'is_afterpulse'] = np.array(df_join.is_afterpulse)
+                    df.loc[selector_segment, 'prob_afterpulse'] = np.array(df_join.prob_afterpulse)
+                    df.loc[selector_segment, 'sat_ratio'] = np.array(df_join.ratio_saturation)
+                    df.loc[selector_segment, 'sat_ratio_smooth'] = np.array(df_join.ratio_saturation_smooth)
+                    df.loc[selector_segment, 'sat_elev'] = np.array(df_join.elev_saturation)
+            except: 
+                print('Something went wrong removing afterpulses for mframe %i ...' % mframe)
+                traceback.print_exc()
+
+    # now get the densities of photons
+    for mframe in df_mframe_selected.index:
+        if np.sum(df.mframe == mframe) > 50:
+            try:
+                selector_segment = ((df.mframe == mframe) & ~df.is_afterpulse)
                 dfseg = df[selector_segment].copy()
 
                 xmin = df_mframe_selected.loc[mframe, 'xatc_min']
@@ -382,7 +517,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                 wid = np.sqrt(area/np.pi)
 
                 # buffer segment for density calculation
-                selector_buffer = (df.xatc >= (dfseg.xatc.min()-aspect*wid)) & (df.xatc <= (dfseg.xatc.max()+aspect*wid))
+                selector_buffer = (df.xatc >= (dfseg.xatc.min()-aspect*wid)) & (df.xatc <= (dfseg.xatc.max()+aspect*wid)) & (~df.is_afterpulse)
                 dfseg_buffer = df[selector_buffer].copy()
                 dfseg_buffer.xatc += np.random.uniform(low=-0.35, high=0.35, size=len(dfseg_buffer.xatc))
 
@@ -426,50 +561,6 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
 
                     # avoid looking for peaks when there's no / very little data
                     if len(dfsubseg > 5):
-
-                        beam_strength = ancillary['gtx_strength_dict'][gtx]
-                        if beam_strength == 'weak':
-                            # _____________________________________________________________
-                            # check for specular returns at 0.94 & 1.46 m below main peak (roughly???)
-                            bin_h_spec = 0.01
-                            smoothing_spec = 0.15
-                            spec1 = 0.94
-                            spec2 = 1.46
-                            spec_tol = 0.1
-                            rm_h = 0.1
-                            bins_spec = np.arange(start=peak_loc2-10.0, stop=peak_loc2+5.0, step=bin_h_spec)
-                            mid_spec = bins_spec[:-1] + 0.5 * bin_h_spec
-                            hist_spec = np.histogram(dfsubseg.h, bins=bins_spec)
-                            window_size = int(smoothing_spec/bin_h_spec)
-                            if len(hist_spec[0]) < 1:
-                                break
-                            if np.max(hist_spec[0]) == 0:
-                                break
-                            hist_vals = hist_spec[0] / np.max(hist_spec[0])
-                            hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window_size,center=True,min_periods=1).mean())
-                            hist_vals_smoothed /= np.max(hist_vals_smoothed)
-                            peaks, peak_props = find_peaks(hist_vals_smoothed, height=0.1, distance=int(0.4/bin_h_spec), prominence=0.1)
-                            if len(peaks) > 2:
-                                peak_hs = mid_spec[peaks]
-                                peak_proms = peak_props['prominences']
-                                idx_3highest = np.flip(np.argsort(peak_proms))[:3]
-                                prms = peak_proms[idx_3highest]
-                                pks_h = np.sort(peak_hs[idx_3highest])
-                                has_main_peak = np.abs(pks_h[2]-peak_loc2) < 0.3
-                                has_1st_specular_return = np.abs(pks_h[2]-pks_h[1]-spec1) < spec_tol
-                                has_2nd_specular_return = np.abs(pks_h[2]-pks_h[0]-spec2) < spec_tol
-                                if has_main_peak & has_1st_specular_return & has_2nd_specular_return:
-                                    # print('specular return. pk-uppr=%5.2f, 1st=%5.2f, 2nd%5.2f, proms: %.2f, %.2f, %.2f' % \
-                                    #       (np.abs(pks_h[2]-peak_loc2), pks_h[2]-pks_h[1], pks_h[2]-pks_h[0], 
-                                    #        prms[0], prms[1], prms[2]))
-                                    correct_specular = True
-                                    is_upper_spec = (dfsubseg.h < (pks_h[1] + rm_h)) & (dfsubseg.h > (pks_h[1] - rm_h))
-                                    is_lower_spec = (dfsubseg.h < (pks_h[0] + rm_h)) & (dfsubseg.h > (pks_h[0] - rm_h))
-                                    is_specular = is_upper_spec | is_lower_spec
-                                    dfsubseg['specular'] = is_specular
-                                    dfsubseg.loc[dfsubseg['specular'], 'snr'] = 0.0
-                                    dfseg.loc[selector_subseg,'specular'] = is_specular
-                            #______________________________________________________________
 
                         # get the median of the snr values in each bin
                         bins_subseg_snr = np.arange(start=np.max((dfsubseg.h.min(),peak_loc2-70)), stop=peak_loc2+2*buffer, step=bin_height_snr)
@@ -532,9 +623,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                                         elev_2ndpeaks.append(secondpeak_h)
                                         subpeaks_xatc.append(secondpeak_xtac)
 
-                df.loc[selector_segment,'specular'] = dfseg['specular']
-
-                # keep only second returns that are 5 m or closer to the next one on either side 
+                # keep only second returns that are 3 m or closer to the next one on either side 
                 # (helps filter out random noise, but might in rare cases suppress a signal)
                 maxdiff = 3.0
                 if len(elev_2ndpeaks) > 0:
@@ -616,7 +705,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     print(txt)
 
                 # adjust SNR values for specular returns
-                df.loc[df['specular'], 'snr'] = 0.0
+                # df.loc[df['specular'], 'snr'] = 0.0
 
             except: 
                 print('Something went wrong getting densities and peaks for mframe %i ...' % mframe)
@@ -1272,7 +1361,7 @@ class melt_lake:
     
 
     #-------------------------------------------------------------------------------------
-    def plot_detected(self, fig_dir='figs', verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True):
+    def plot_detected(self, fig_dir='figs', verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True, closefig=True):
 
         import matplotlib
         from matplotlib.patches import Rectangle
@@ -1294,8 +1383,8 @@ class melt_lake:
             fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
 
             # plot the ATL03 photon data
-            scatt = ax.scatter(self.photon_data.xatc, self.photon_data.h,s=5, c=self.photon_data.snr, alpha=1, 
-                               edgecolors='none', cmap=cmc.lajolla, vmin=0, vmax=1)
+            dfp = self.photon_data[~self.photon_data.is_afterpulse]
+            scatt = ax.scatter(dfp.xatc, dfp.h,s=5, c=dfp.snr, alpha=1, edgecolors='none', cmap=cmc.lajolla, vmin=0, vmax=1)
             p_scatt = ax.scatter([-9999]*4, [-9999]*4, s=15, c=[0.0,0.25,0.75,1.0], alpha=1, edgecolors='none', cmap=cmc.lajolla, 
                                  vmin=0, vmax=1, label='ATL03 photons')
 
@@ -1437,8 +1526,8 @@ class melt_lake:
             fig.tight_layout()
             ax.set_ylim(ylms)
             ax.set_xlim(xlms)
-
-            plt.close(fig)
+            if closefig: 
+                plt.close(fig)
 
             return fig
         

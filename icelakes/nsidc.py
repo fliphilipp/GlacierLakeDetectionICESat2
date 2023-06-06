@@ -194,6 +194,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     # set the variables for subsetting
     if vars_sub == 'default':
         vars_sub = ['/ancillary_data/atlas_sdp_gps_epoch',
+                    '/ancillary_data/calibrations/dead_time/gtx',
                     '/orbit_info/rgt',
                     '/orbit_info/cycle_number',
                     '/orbit_info/sc_orient',
@@ -214,8 +215,9 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                     '/gtx/heights/pce_mframe_cnt',
                     '/gtx/heights/ph_id_pulse',
                     '/gtx/heights/signal_conf_ph',
-                    '/gtx/heights/quality_ph',
-                    '/ancillary_data/calibrations/dead_time/gtx']
+                    '/gtx/heights/quality_ph']
+        if int(version) > 5:
+            vars_sub.append('/gtx/heights/weight_ph')
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     
     if gtxs == 'all':
@@ -249,7 +251,8 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         search_params['page_num'] += 1
         
     granule_list, idx_unique = np.unique(np.array([g['producer_granule_id'] for g in granules]), return_index=True)
-    granules = granules[idx_unique]
+    print(idx_unique)
+    granules = [g for i,g in enumerate(granules) if i in idx_unique] # keeps double counting, not sure why
     print('\nDownloading ICESat-2 data. Found granules:')
     if len(granules) == 0:
         print('None')
