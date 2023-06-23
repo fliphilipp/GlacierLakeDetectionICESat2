@@ -378,7 +378,7 @@ def get_saturation_and_elevation(hvals, num_channels, dead_time):
 
 
 ##########################################################################################
-def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.2, n_subsegs=10,
+def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.3, n_subsegs=10,
                                 bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
     
     print('---> removing afterpulses, calculating photon densities & looking for second density peaks below the surface')
@@ -591,7 +591,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                         # take histogram binning values into account, but clip surface peak to second highest peak height
                         subhist, subhist_edges = np.histogram(dfsubseg.h, bins=bins_subseg_snr)
                         subhist_nosurface = subhist.copy()
-                        subhist_nosurface[(mid_subseg_snr < (peak_loc2+2*dh_signal)) & (mid_subseg_snr > (peak_loc2-2*dh_signal))] = 0
+                        subhist_nosurface[(mid_subseg_snr < (peak_loc2+dh_signal)) & (mid_subseg_snr > (peak_loc2-dh_signal))] = 0
                         subhist_nosurface_smoothed = np.array(pd.Series(subhist_nosurface).rolling(window_size_sub,center=True,min_periods=1).mean())
                         if len(subhist_nosurface_smoothed) < 1:
                             break
@@ -1549,6 +1549,9 @@ class melt_lake:
             phdat.create_dataset('h', data=self.photon_data.h, compression=comp)
             phdat.create_dataset('geoid', data=self.photon_data.geoid, compression=comp)
             phdat.create_dataset('snr', data=self.photon_data.snr, compression=comp)
+            phdat.create_dataset('sat_ratio', data=self.photon_data.sat_ratio, compression=comp)
+            phdat.create_dataset('sat_elev', data=self.photon_data.sat_elev, compression=comp)
+            phdat.create_dataset('prob_afterpulse', data=self.photon_data.prob_afterpulse, compression=comp)
             phdat.create_dataset('mframe', data=self.photon_data.mframe, compression=comp)
             phdat.create_dataset('ph_id_pulse', data=self.photon_data.ph_id_pulse, compression=comp)
 
