@@ -3,13 +3,14 @@ import os
 import sys
 import pickle
 import subprocess
+import numpy as np
 import icelakes
 from icelakes.utilities import encedc, decedc, get_size
 from icelakes.nsidc import download_granule, edc
 from icelakes.detection import read_atl03, detect_lakes, melt_lake
 
 parser = argparse.ArgumentParser(description='Test script to print some stats for a given ICESat-2 ATL03 granule.')
-parser.add_argument('--granule', type=str, default='ATL03_20210715182907_03381203_005_01.h5',
+parser.add_argument('--granule', type=str, default='ATL03_20220714010847_03381603_006_02.h5',
                     help='The producer_id of the input ATL03 granule')
 parser.add_argument('--polygon', type=str, default='geojsons/jakobshavn_small.geojson',
                     help='The file path of a geojson file for spatial subsetting')
@@ -63,6 +64,7 @@ gtx_list, ancillary = read_atl03(input_filename, gtxs_to_read='none')
 # detect melt lakes
 lake_list = []
 granule_stats = [0,0,0,0]
+
 for gtx in gtx_list:
     lakes_found, gtx_stats = detect_lakes(input_filename, gtx, args.polygon, verbose=False)
     for i in range(len(granule_stats)): granule_stats[i] += gtx_stats[i]
@@ -75,12 +77,22 @@ if granule_stats[0] > 0:
 # print stats for granule
 print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
 
-# save plots and lake data dictionaries
+# for each lake call the surrf algorithm for depth determination
+print('---> determining depth for each lake')
 for lake in lake_list:
-    filename_base = 'lake_%05i_%s_%s_%s_%s_%s' % ((1.0-lake.detection_quality)*10000, lake.ice_sheet, lake.melt_season, 
-                                                  lake.polygon_name, lake.granule_id[:-3], lake.gtx)
+    lake.surrf()
+    print('   --> %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (lake.lat,lake.lon,lake.max_depth,lake.lake_quality))
+
+# remove zero quality lakes
+lake_list[:] = [lake for lake in lake_list if lake.lake_quality > 0]
+
+for i, lake in enumerate(lake_list):
+    lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
+    filename_base = 'lake_%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
+                                                       lake.ice_sheet, lake.melt_season, 
+                                                       lake.lake_id)
     # plot each lake and save to image
-    fig = lake.plot_detected(min_width=0.0, min_depth=0.0);
+    fig = lake.plot_lake(closefig=True)
     figname = args.out_plot_dir + '/%s.jpg' % filename_base
     if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
     
@@ -102,7 +114,7 @@ statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon
 with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
     
 # clean up the input data
-# os.remove(input_filename)
+os.remove(input_filename)
 
 print('\n-------------------------------------------------')
 print(  '----------->   Python script done!   <-----------')

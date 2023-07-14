@@ -1538,10 +1538,491 @@ class melt_lake:
                 plt.close(fig)
 
             return fig
+
+            
+    #-------------------------------------------------------------------------------------
+    def surrf(self, final_resolution=5.0):
+
+        # function for robust (iterative) nonparametric regression (to fit surface and bed of lake)
+        def robust_npreg(df_fit, ext, n_iter=10, poly_degree=1, len_xatc_min=100, n_points=[300,100], 
+            resolutions=[30,5], stds=[20,6], ext_buffer=250.0, full=False, init=None):
+            
+            h_list = []
+            x_list = []
+            n_phots = np.linspace(n_points[0], n_points[1], n_iter)
+            resols = np.linspace(resolutions[0], resolutions[1], n_iter)
+            n_stds = np.hstack((np.linspace(stds[0], stds[1], n_iter-1), stds[1]))
+            minx = np.min(np.array(ext))
+            maxx = np.max(np.array(ext))
         
+            # take into account initial guess, if specified (needs to be dataframe with columns 'xatc' and 'h')
+            if init is not None: 
+                if len(init) > 0: 
+                    range_vweight = 10.0
+                    df_fit['heights_fit'] = np.interp(df_fit.xatc, init.xatc, init.h, left=np.nan, right=np.nan)
+                    vert_weight = (1.0 - np.clip((np.abs(df_fit.h-df_fit.heights_fit)/range_vweight),0,1)**3 )**3
+                    vert_weight[np.isnan(vert_weight)] = 0.01
+                    df_fit['vert_weight'] = vert_weight
+            else: 
+                df_fit['vert_weight'] = 1.0
+            
+            for it in range(n_iter):
+                
+                n_phot = n_phots[it]
+                res = resols[it]
+                n_std = n_stds[it]
+                evaldf = pd.DataFrame(np.arange(minx-ext_buffer,maxx+ext_buffer+res,step=res),columns=['xatc'])
+                h_arr = np.full_like(evaldf.xatc,fill_value=np.nan)
+                stdev_arr = np.full_like(evaldf.xatc,fill_value=np.nan)
+                df_fit_nnz = df_fit[df_fit.vert_weight > 1e-3].copy()
+        
+                # for every point at which to evaluate local fit
+                for i,x in enumerate(evaldf.xatc):
+                    
+                    # look for the closest n_phot photons around the center point for local polynomial fit
+                    idx_closest_photon = np.argmin(np.abs(np.array(df_fit_nnz.xatc - x)))
+                    n_phot_each_side = int(np.ceil(n_phot / 2))
+                    idx_start = np.clip(idx_closest_photon - n_phot_each_side, 0, None)
+                    idx_end = np.clip(idx_closest_photon + n_phot_each_side +1, None, len(df_fit_nnz)-1)
+                    xatc_start = df_fit_nnz.iloc[idx_start].xatc
+                    xatc_end = df_fit_nnz.iloc[idx_end].xatc
+                    len_xatc = xatc_end - xatc_start
+        
+                    # if the fit for n_phot does not span at least len_xatc_min, then make the segment longer
+                    if len_xatc < len_xatc_min: 
+                        xstart = x - len_xatc_min/2
+                        xend = x + len_xatc_min/2
+                        idx_start = np.min((int(np.clip(np.argmin(np.abs(np.array(df_fit_nnz.xatc - xstart))), 0, None)), idx_start))
+                        idx_end = np.max((int(np.clip(np.argmin(np.abs(np.array(df_fit_nnz.xatc - xend))), None, len(df_fit_nnz)-1)), idx_end))
+        
+                    # make a data frame with the data for the fit
+                    dfi = df_fit_nnz.iloc[idx_start:idx_end].copy()
+        
+                    # tricube weights for xatc distance from evaluation point
+                    maxdist = np.nanmax(np.abs(dfi.xatc - x))
+                    dfi['weights'] = (1.0-(np.abs(dfi.xatc-x)/(1.00001*maxdist))**3)**3
+        
+                    # also weight by the SNR values and the vertical distance from previous fit 
+                    if it < (n_iter-1):  # ignore SNR values in the last pass
+                        dfi.weights *= dfi.snr
+                    if (init is not None) | (it > 0):  # vertical weights are only available after first iteration or with initial guess
+                        dfi.weights *= dfi.vert_weight
+        
+                    # do the polynomial fit
+                    try: 
+                        reg_model = np.poly1d(np.polyfit(dfi.xatc, dfi.h, poly_degree, w=dfi.weights))
+                        h_arr[i] = reg_model(x)
+                        stdev_arr[i] = np.average(np.abs(dfi.h - reg_model(dfi.xatc)), weights=dfi.weights) # use weighted mean absolute error
+                    except:  # if polynomial fit does not converge, use a weighted average
+                        h_arr[i] = np.average(dfi.h,weights=dfi.weights)
+                        stdev_arr[i] = np.average(np.abs(dfi.h - h_arr[i]), weights=dfi.weights) # use weighted mean absolute error
+                    
+                evaldf['h_fit'] = h_arr
+                evaldf['stdev'] = stdev_arr
+                
+                # interpolate the fit and residual MAE to the photon-level data
+                df_fit['heights_fit'] = np.interp(df_fit.xatc, evaldf.xatc, evaldf.h_fit, left=-9999, right=-9999)
+                df_fit['std_fit'] = np.interp(df_fit.xatc, evaldf.xatc, evaldf.stdev)
+        
+                # compute tricube weights for the vertical distance for the next iteration
+                width_vweight = np.clip(n_std*df_fit.std_fit,0.0, 10.0)
+                df_fit['vert_weight'] = (1.0 - np.clip((np.abs(df_fit.h-df_fit.heights_fit)/width_vweight),0,1)**3 )**3
+                df_fit.loc[df_fit.heights_fit == -9999, 'vert_weight'] = 0.0 # give small non-zero weight for leading and trailing photons
+                
+                if full:
+                    h_list.append(h_arr)
+                    x_list.append(evaldf.xatc)
+        
+                # print('iteration %i / %i' % (it+1, n_iter), end='\r')
+        
+            if full:
+                return evaldf, df_fit, x_list, h_list
+            else:
+                return evaldf, df_fit
+
+        # get the relevant data (photon-level dataframe, water surface elevation estimate, extent estimate)
+        df = self.photon_data.copy()
+        h_surf = self.surface_elevation
+        ext = self.surface_extent_detection
+        init_guess_bed = pd.DataFrame(self.detection_2nd_returns)
+        df.sort_values(by='xatc', inplace=True, ignore_index=True)
+
+        if 'sat_ratio' in df.keys(): 
+            df['is_afterpulse'] = df.prob_afterpulse>np.random.uniform(0,1,len(df))
+
+        # fit the surface elevation only to photons just around and above the estimated water surface elevation
+        df['in_extent'] = False
+        for extseg in ext:
+            df.loc[(df.xatc >= extseg[0]) & (df.xatc <= extseg[1]),'in_extent'] = True
+        surffit_selector = (((df.h > (h_surf-0.4)) | (~df.in_extent)) & (df.snr > 0.5)) | ((df.h > (h_surf-0.3)) & (df.h < (h_surf+0.3)))
+        df_fit = df[surffit_selector].copy()
+        evaldf_surf, df_fit_surf = robust_npreg(df_fit, ext, n_iter=10, poly_degree=1, len_xatc_min=20,
+                                                n_points=[300,100], resolutions=[20,final_resolution], stds=[10,4], ext_buffer=250.0)
+
+        # re-calculate water surface elevation based on fit
+        hist_res = 0.001
+        hist_smoothing = 0.05
+        bins = np.arange(h_surf-1, h_surf+1+hist_res, hist_res)
+        mids = bins[:-1] + np.diff(bins)
+        histvals = np.histogram(evaldf_surf.h_fit, bins=bins)[0]
+        hist_smooth = pd.Series(histvals).rolling(window=int(np.ceil(hist_smoothing/hist_res)),center=True, min_periods=1).mean()
+        surf_elev = mids[np.argmax(hist_smooth)]
+
+        # set the probability of photons being surface / water
+        df['prob_surf'] = 0
+        df.loc[df_fit_surf.index, 'prob_surf'] = df_fit_surf.vert_weight
+        df['is_signal'] = df.prob_surf > 0.0
+        df['surf_fit'] = np.interp(df.xatc, evaldf_surf.xatc, evaldf_surf.h_fit, left=np.nan, right=np.nan)
+        width_water = 0.35
+        df['is_water'] = (np.abs(df.surf_fit - surf_elev) < width_water) & ((df.h - df.surf_fit) > (-width_water))
+        
+        # get data frame with the water surface removed, and set a minimum for SNR, except for afterpulses
+        df_nosurf = df[(~df.is_water) & (df.h < (surf_elev + 30)) & (df.h > (surf_elev - 50))].copy()
+        min_snr = 0.2
+        df_nosurf['snr'] = min_snr + (1.0-min_snr)*df_nosurf.snr
+        
+        # discard heavily saturated PMT ionization afterpulses (rarely an issue)
+        if 'sat_ratio' in df_nosurf.keys(): 
+            df_nosurf = df_nosurf[(df_nosurf.sat_ratio < 3.5) | ((surf_elev - df_nosurf.h) < 12.0)]
+            df_nosurf.loc[df_nosurf.is_afterpulse, 'snr'] = 0.0
+        
+        # get an initial guess for the nonparametric regression fit to the lake bed (from secondary peaks during detection stage)
+        init_guess_bed = init_guess_bed[(init_guess_bed.prom > 0.3) & (init_guess_bed.h < (surf_elev-2.0))]
+        init_guess_surf = pd.DataFrame({'xatc': evaldf_surf.xatc, 'h': evaldf_surf.h_fit})
+        init_guess_surf = init_guess_surf[init_guess_surf.h > (surf_elev+width_water)]
+        init_guess = pd.concat((init_guess_bed, init_guess_surf), ignore_index=True).sort_values(by='xatc')
+        init_guess_hsmooth = init_guess.h.rolling(window=5, center=True, min_periods=1).mean()
+        is_bed = init_guess.h < surf_elev
+        init_guess.loc[is_bed, 'h'] = init_guess_hsmooth[is_bed]
+        
+        # reduce the snr between the lake surface and initial guess, to mitigate the effect of subsurface scattering
+        # (very occasionally, this can remove signal)
+        df_nosurf['init_guess'] = np.interp(df_nosurf.xatc, init_guess.xatc, init_guess.h, left=np.nan, right=np.nan)
+        reduce_snr = (df_nosurf.h > (df_nosurf.init_guess + 1.0)) & (df_nosurf.h < surf_elev)
+        df_nosurf['reduce_snr_factor'] = 1.0
+        reduce_snr_factor = 1.0 - 1.5*((df_nosurf.h[reduce_snr] - (df_nosurf.init_guess[reduce_snr] + 1.0)) / 
+                                    ((surf_elev-width_water) - (df_nosurf[reduce_snr].init_guess + 1.0)))
+        reduce_snr_factor = np.clip(reduce_snr_factor, 0, 1)
+        df_nosurf.loc[reduce_snr, 'reduce_snr_factor'] = reduce_snr_factor
+        df_nosurf.loc[reduce_snr, 'snr'] *= df_nosurf.reduce_snr_factor
+        df_nosurf = df_nosurf[df_nosurf.snr > 0].copy()
+        
+        # fit lakebed surface 
+        npts = [100,50] if self.beam_strength=='weak' else [200,100]
+        evaldf, df_fit_bed, xv, hv = robust_npreg(df_nosurf, ext, n_iter=20, poly_degree=3, len_xatc_min=100,
+                                                  n_points=npts, resolutions=[20,final_resolution], stds=[10,3], 
+                                                  ext_buffer=200.0, full=True, init=init_guess)
+
+        # add probability of being lake bed for each photon
+        df['prob_bed'] = 0
+        df.loc[df_fit_bed.index, 'prob_bed'] = df_fit_bed.vert_weight
+        df.loc[df.prob_bed>0.0,'is_signal'] = True
+        df.loc[df.h > surf_elev, 'prob_bed'] = 0
+        df.prob_bed /= df.prob_bed.max()
+
+        # compile the results from surface and bed fitting into one data frame
+        evaldf['h_fit_surf'] = np.interp(evaldf.xatc, evaldf_surf.xatc, evaldf_surf.h_fit)
+        evaldf['stdev_surf'] = np.interp(evaldf.xatc, evaldf_surf.xatc, evaldf_surf.stdev)
+        evaldf['is_water'] = np.abs(evaldf.h_fit_surf - surf_elev) < width_water
+        
+        df['bed_fit'] = np.interp(df.xatc, evaldf.xatc, evaldf.h_fit, left=np.nan, right=np.nan)
+        df.loc[df.bed_fit > surf_elev,'prob_surf'] = 0.0
+
+        # estimate the quality of the signal 
+        std_range = 2.0  # calculate the photon density within this amount of residual MAEs for the bed density
+        qual_smooth = 40  # along-track meters for smoothing the the quality measure 
+        evaldf['lower'] = evaldf.h_fit-std_range*evaldf.stdev  # lower threshold for bed photon density 
+        evaldf['upper'] = evaldf.h_fit+std_range*evaldf.stdev  # uppper threshold for bed photon density / lower threshold for lake interior 
+        evaldf['hrange_bed'] = evaldf.upper - evaldf.lower  # the elevation range over which to calculate bed photon density
+        evaldf['hrange_int'] = np.clip((surf_elev - evaldf.upper) * 0.5 , 0.5, None) # the elevation range over which to calculate interior photon density
+        evaldf['upper_int'] = evaldf.h_fit + evaldf.hrange_bed/2 + evaldf.hrange_int # uppper threshold for lake interior photon density
+
+        # initialize photon counts per depth measurement point, and get photon data frame with afterpulses removed
+        num_bed = np.zeros_like(evaldf.xatc)
+        num_interior = np.zeros_like(evaldf.xatc)
+        df_nnz = df.copy()
+        if 'is_afterpulse' in df_nnz.keys(): 
+            df_nnz = df_nnz[~df_nnz.is_afterpulse]
+
+        # loop through measurement points and count photons in the lake bed and lake interior ranges
+        for i in range(len(evaldf)):
+            vals = evaldf.iloc[i]
+            in_xatc = (df_nnz.xatc > (vals.xatc-final_resolution)) & (df_nnz.xatc < (vals.xatc+final_resolution))
+            in_range_bed = in_xatc & (df_nnz.h > vals.lower) & (df_nnz.h < vals.upper)
+            in_range_interior = in_xatc & (df_nnz.h > vals.upper) & (df_nnz.h < vals.upper_int)
+            num_bed[i] = np.sum(in_range_bed)
+            num_interior[i] = np.sum(in_range_interior)
+
+        # calculate the density ratio weight between the lake bed and the lake interior for each point
+        # is zero if bed density is less or equal to interior density
+        # approaches 1 as bed density becomes >> interior density
+        # is 0 if there are no bed photons
+        # is 1 if there are bed photons, but no interior photons
+        evaldf['nph_bed'] = num_bed
+        evaldf['nph_int'] = num_interior
+        evaldf.loc[evaldf.nph_bed == 0, 'nph_bed'] = np.nan
+        evaldf['density_ratio'] = 1 - np.clip((evaldf.nph_int / evaldf.hrange_int)/(evaldf.nph_bed / evaldf.hrange_bed), 0, 1)
+        evaldf.loc[evaldf.h_fit > surf_elev,'density_ratio'] = 1.0 
+        evaldf.loc[evaldf.nph_bed.isna(), 'density_ratio'] = 0.0
+
+        # get the width ratio weight 
+        # becomes 0 when the bed fit range includes the surface
+        # becomes 1 when the interior range is at least as large as the lake bed fit range
+        width_ratio = np.clip((evaldf.h_fit_surf+std_range*evaldf.stdev_surf - evaldf.upper),0,None) / (1.0*evaldf.hrange_bed)
+        width_ratio[evaldf.h_fit > surf_elev] = 1.0
+        evaldf['width_ratio'] = np.clip(width_ratio, 0, 1)
+        
+        # smooth out the weights a little 
+        wdw = int(np.ceil(qual_smooth/final_resolution))
+        evaldf['density_ratio'] = evaldf.density_ratio.rolling(window=3*wdw, win_type='gaussian', min_periods=1, center=True).mean(std=wdw/2)
+        evaldf['width_ratio'] = evaldf.width_ratio.rolling(window=3*wdw, win_type='gaussian', min_periods=1, center=True).mean(std=wdw/2)
+
+        # get the confidence in the measurement as the product between the two
+        evaldf['conf'] = evaldf.density_ratio * evaldf.width_ratio
+
+        # calculate the water depth
+        evaldf['depth'] = np.clip(surf_elev - evaldf.h_fit, 0, None) / 1.333
+        evaldf.loc[(~evaldf.is_water) & (evaldf.depth > 0.0), 'conf'] = 0.0
+        evaldf.loc[~evaldf.is_water, 'depth'] = 0.0
+
+        # multiply probability of bed by condifence in measurement
+        df.prob_bed *= np.interp(df.xatc, evaldf.xatc, evaldf.conf, left=0.0, right=0.0)
+
+
+        # get the overall lake quality
+        df_bed = evaldf[(evaldf.h_fit < surf_elev) & (evaldf.h_fit < evaldf.h_fit_surf)].copy()
+        nbins = 300
+        counts = np.zeros((len(df_bed), nbins))
+        
+        for i in range(len(df_bed)):
+            vals = df_bed.iloc[i]
+            in_xatc = (df_nnz.xatc > (vals.xatc-final_resolution/2)) & (df_nnz.xatc < (vals.xatc+final_resolution/2))
+            thisdf = df_nnz[in_xatc]
+            # bins = np.linspace(vals.h_fit-vals.depth, surf_elev+vals.depth, nbins+1)
+            hrng = vals.h_fit_surf - vals.h_fit
+            bins = np.linspace(vals.h_fit-hrng, vals.h_fit_surf+hrng, nbins+1)
+            hist = np.histogram(thisdf.h, bins=bins)[0]
+            counts[i,:] = hist
+        
+        scaled_hist = np.sum(counts, axis=0)
+        scaled_smooth = pd.Series(scaled_hist).rolling(window=int(nbins/3), win_type='gaussian', min_periods=1, center=True).mean(std=nbins/100)
+        df_dens = pd.DataFrame({'x': np.linspace(-1,2,nbins), 'n': scaled_smooth})
+        n_bedpeak = np.interp(0.0, df_dens.x, df_dens.n)
+        df_dens_int = df_dens[(df_dens.x > 0) & (df_dens.x < 1)].copy()
+        n_saddle = np.min(df_dens_int.n)
+        n_saddle = np.mean(df_dens_int.n[df_dens_int.n < np.percentile(df_dens_int.n, 33)])
+        depth_quality = np.clip(n_bedpeak / n_saddle - 2.0, 0, None)
+
+        evaldf['h_fit_bed'] = evaldf.h_fit
+        evaldf['std_bed'] = evaldf.stdev
+        evaldf['std_surf'] = evaldf.stdev_surf
+        df['xatc_10m'] = np.round(df.xatc, -1)
+        df_spatial = df[['lat', 'lon', 'xatc', 'xatc_10m']][df.is_signal].groupby('xatc_10m').median()
+        evaldf['lat'] = np.interp(evaldf.xatc, df_spatial.xatc, df_spatial.lat, right=np.nan, left=np.nan)
+        evaldf['lon'] = np.interp(evaldf.xatc, df_spatial.xatc, df_spatial.lon, right=np.nan, left=np.nan)
+        evaldf = evaldf[~evaldf.lat.isna()]
+        evaldf = evaldf[~evaldf.lon.isna()]
+
+        self.photon_data['prob_surf'] = df.prob_surf
+        self.photon_data['prob_bed'] = df.prob_bed
+        self.photon_data['is_signal'] = df.is_signal
+        self.photon_data['is_afterpulse'] = df.is_afterpulse
+        self.depth_data = evaldf[['xatc', 'lat', 'lon', 'depth', 'conf', 'h_fit_surf', 'h_fit_bed', 'std_surf', 'std_bed']].copy()
+        self.surface_elevation = surf_elev
+        self.lake_quality = depth_quality
+        self.max_depth = evaldf.depth[evaldf.conf>0.0].max()
+   
+    #-------------------------------------------------------------------------------------
+    def plot_lake(self, fig_dir='figs', verbose=False, print_mframe_info=True, closefig=True):
+
+        import matplotlib
+        from matplotlib.patches import Rectangle
+        fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
+
+        dfd = self.depth_data
+        surf_elev = self.surface_elevation
+        below_surf = dfd.depth > 0.0
+        plot_surf = np.ones_like(dfd.h_fit_surf)*surf_elev
+        plot_surf[~below_surf] = np.nan
+        plot_bed = np.array(dfd.h_fit_bed)
+        plot_bed[~below_surf] = np.nan
+
+        # plot the ATL03 photon data
+        scatt = ax.scatter(self.photon_data.xatc, self.photon_data.h,s=5, c=self.photon_data.snr, alpha=1, 
+                           edgecolors='none', cmap=cmc.lajolla, vmin=0, vmax=1)
+        p_scatt = ax.scatter([-9999]*4, [-9999]*4, s=15, c=[0.0,0.25,0.75,1.0], alpha=1, edgecolors='none', cmap=cmc.lajolla, 
+                             vmin=0, vmax=1, label='ATL03 photons')
+
+        # plot the second returns from detection
+        for j, prom in enumerate(self.detection_2nd_returns['prom']):
+            ax.plot(self.detection_2nd_returns['xatc'][j], self.detection_2nd_returns['h'][j], 
+                                    marker='o', mfc='none', mec='b', linestyle = 'None', ms=prom*5, alpha=0.5)
+        p_2nd_return, = ax.plot(-9999, -9999, marker='o', mfc='none', mec='b', ls='None', ms=3, label='second return peaks (detection)')
+
+        # plot surface elevation and the fit to the lake bed
+        p_surf_elev, = ax.plot(dfd.xatc, plot_surf, 'g-', label='lake surface')
+        p_bed_fit, = ax.plot(dfd.xatc, plot_bed, 'b-', label='lake bed fit')
+
+        # plot the water depth on second axis (but zero aligned with the lake surface elevation 
+        ax2 = ax.twinx()
+        p_water_depth = ax2.scatter(dfd.xatc, dfd.depth, s=3, c=[(1, 1-x, 1-x) for x in dfd.conf], label='water depth')
+        yl1 = np.array([surf_elev - 1.5*1.333*dfd.depth.max(), surf_elev + 1.333*dfd.depth.max()])
+        ylms = yl1
+        yl2 = yl1 - surf_elev
+
+        # plot mframe bounds
+        ymin, ymax = ax.get_ylim()
+        mframe_bounds_xatc = list(self.mframe_data['xatc_min']) + [self.mframe_data['xatc_max'].iloc[-1]]
+        for xmframe in mframe_bounds_xatc:
+            ax.plot([xmframe, xmframe], [ymin, ymax], 'k-', lw=0.5)
+
+        # visualize which segments initially passed
+        for i, passing in enumerate(self.mframe_data['lake_qual_pass']):
+            mf = self.mframe_data.iloc[i]
+            if passing:
+                xy = (mf.xatc_min, ylms[0])
+                width = mf.xatc_max - mf.xatc_min
+                height = ylms[1] - ylms[0]
+                rct = Rectangle(xy, width, height, ec=(1,1,1,0), fc=(0,0,1,0.1), zorder=-1000, label='major frame passed lake check')
+                p_passed = ax.add_patch(rct)
+            p_mfpeak, = ax.plot((mf.xatc_min,mf.xatc_max), (mf.peak,mf.peak),'k-',lw=0.5, label='major frame peak')
+
+        # add a legend
+        hdls = [p_scatt, p_surf_elev, p_bed_fit, p_water_depth, p_2nd_return, p_mfpeak, p_passed]
+        ax.legend(handles=hdls, loc='lower left', fontsize=7, scatterpoints=4)
+
+        # add the colorbar 
+        divider = make_axes_locatable(ax2)
+        cax = divider.append_axes('right', size='4%', pad=0.5)
+        cax.axis('off')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='4%', pad=0.5)
+        cbar = fig.colorbar(scatt, cax=cax, orientation='vertical')
+        cbar.ax.get_yaxis().set_ticks([])
+        for j, lab in enumerate([0.2, 0.4, 0.6, 0.8]):
+            cbar.ax.text(.5, lab, '%.1f'%lab, ha='center', va='center', fontweight='black')
+        cbar.ax.get_yaxis().labelpad = 15
+        cbar.ax.set_ylabel('photon density', rotation=270, fontsize=8)
+
+        # add labels and description in title
+        txt  = 'ICESat-2 Melt Lake: %s, ' % ('Greenland Ice Sheet' if self.lat>=0 else 'Antarctic Ice Sheet')
+        txt += '%s Melt Season' % self.melt_season
+        fig.suptitle(txt, y=0.95, fontsize=14)
+
+        txt  = 'location: %s, %s (area: %s) | ' % (self.lat_str, self.lon_str, self.polygon_name)
+        txt += 'time: %s UTC | surface elevation: %.2f m\n' % (self.date_time, self.surface_elevation)
+        txt += 'RGT %s %s cycle %i | ' % (self.rgt, self.gtx.upper(), self.cycle_number)
+        txt += 'beam %i (%s, %s spacecraft orientation) | ' % (self.beam_number, self.beam_strength, self.sc_orient)
+        txt += 'granule ID: %s' % self.granule_id
+        ax.set_title(txt, fontsize=8)
+
+        ax.set_ylabel('elevation above geoid [m]',fontsize=8,labelpad=0)
+        ax2.set_ylabel('water depth [m]',fontsize=8,labelpad=0)
+        ax.tick_params(axis='x', which='major', labelsize=7)
+        ax.tick_params(axis='y', which='major', labelsize=6)
+        ax2.tick_params(axis='y', which='major', labelsize=7)
+        
+        # set limits
+        ax.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+        ax.set_ylim(yl1)
+        ax2.set_ylim(-yl2)
+
+        # add latitude
+        #_________________________________________________________
+        lx = self.photon_data.sort_values(by='lat').iloc[[0,-1]][['lat','xatc']].reset_index(drop=True)
+        lat = np.array(lx.lat)
+        xatc = np.array(lx.xatc)
+        def forward(x):
+            return lat[0] + x * (lat[1] - lat[0]) / (xatc[1] - xatc[0])
+        def inverse(l):
+            return xatc[0] + l * (xatc[1] - xatc[0]) / (lat[1] - lat[0])
+        secax = ax.secondary_xaxis(-0.065, functions=(forward, inverse))
+        secax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+        secax.set_xlabel('latitude / along-track distance',fontsize=8,labelpad=0)
+        secax.tick_params(axis='both', which='major', labelsize=7)
+        secax.ticklabel_format(useOffset=False) # show actual readable latitude values
+
+        # rename x ticks
+        xticklabs = ['%g km' % (xt/1000) for xt in list(ax.get_xticks())]
+        ticks = ax.get_xticks()
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(xticklabs)
+
+        # add mframe info text
+        if print_mframe_info:
+            txt  = 'mframe:\n' % (mf.name%1000)
+            txt += 'photons:\n' % mf.n_phot
+            txt += 'peak:\n'
+            txt += 'flat:\n'
+            txt += 'SNR surf all:\n'
+            txt += 'SNR surf above:\n'
+            txt += 'SNR up:\n'
+            txt += 'SNR low:\n'
+            txt += '2nds:\n'
+            txt += '2nds strength:\n'
+            txt += '2nds number:\n'
+            txt += '2nds spread:\n'
+            txt += '2nds align:\n'
+            txt += '2nds quality:\n'
+            txt += 'pass:'
+            # trans = ax.get_xaxis_transform()
+            bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
+            ax.text(-0.005, 0.98, txt, transform=ax.transAxes, fontsize=4, ha='right', va='top', bbox=bbox)
+            for i,loc in enumerate(self.mframe_data['xatc']):
+                mf = self.mframe_data.iloc[i]
+                txt  = '%i\n' % (mf.name%1000)
+                txt += '%i\n' % mf.n_phot
+                txt += '%.2f\n' % mf.peak
+                txt += '%s\n' % ('Yes.' if mf.is_flat else 'No.')
+                txt += '%i\n' % np.round(mf.snr_surf)
+                txt += '%i\n' % np.round(mf.snr_allabove)
+                txt += '%i\n' % np.round(mf.snr_upper)
+                txt += '%i\n' % np.round(mf.snr_lower)
+                txt += '%i%%\n' % np.round(mf.ratio_2nd_returns*100)
+                txt += '%.2f\n' % mf.quality_secondreturns
+                txt += '%.2f\n' % mf.length_penalty
+                txt += '%.2f\n' % mf.range_penalty
+                txt += '%.2f\n' % mf.alignment_penalty
+                txt += '%.2f\n' % mf.quality_summary
+                txt += '%s' % ('Yes.' if mf.lake_qual_pass else 'No.')
+                trans = ax.get_xaxis_transform()
+                
+                bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
+                if (loc>dfd.xatc.min()) & (loc<dfd.xatc.max()):
+                    ax.text(loc, 0.98, txt, transform=trans, fontsize=4,ha='center', va='top', bbox=bbox)
+
+        # add detection quality description
+        txt  = 'LAKE QUALITY: %6.2f'%self.lake_quality
+        bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
+        ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=10, weight='bold', bbox=bbox)
+
+        fig.patch.set_facecolor('white')
+        fig.tight_layout()
+        ax.set_ylim(yl1)
+        ax2.set_ylim(-yl2)
+        ax.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+        ax2.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+        
+        self.figure = fig
+        if closefig: 
+                plt.close(fig)
+        return fig
+
+    # -------------------------------------------------------------------------------------------
     def write_to_hdf5(self, filename):
         with h5py.File(filename, 'w') as f:
             comp="gzip"
+            dpdat = f.create_group('depth_data')
+            dpdat.create_dataset('lon', data=self.depth_data.lon, compression=comp)
+            dpdat.create_dataset('lat', data=self.depth_data.lat, compression=comp)
+            dpdat.create_dataset('xatc', data=self.depth_data.xatc, compression=comp)
+            dpdat.create_dataset('depth', data=self.depth_data.depth, compression=comp)
+            dpdat.create_dataset('conf', data=self.depth_data.conf, compression=comp)
+            dpdat.create_dataset('h_fit_surf', data=self.depth_data.h_fit_surf, compression=comp)
+            dpdat.create_dataset('h_fit_bed', data=self.depth_data.h_fit_bed, compression=comp)
+            dpdat.create_dataset('std_surf', data=self.depth_data.std_surf, compression=comp)
+            dpdat.create_dataset('std_bed', data=self.depth_data.std_bed, compression=comp)
+            
             phdat = f.create_group('photon_data')
             phdat.create_dataset('lon', data=self.photon_data.lon, compression=comp)
             phdat.create_dataset('lat', data=self.photon_data.lat, compression=comp)
@@ -1554,6 +2035,9 @@ class melt_lake:
             phdat.create_dataset('prob_afterpulse', data=self.photon_data.prob_afterpulse, compression=comp)
             phdat.create_dataset('mframe', data=self.photon_data.mframe, compression=comp)
             phdat.create_dataset('ph_id_pulse', data=self.photon_data.ph_id_pulse, compression=comp)
+            phdat.create_dataset('prob_surf', data=self.photon_data.prob_surf, compression=comp)
+            phdat.create_dataset('prob_bed', data=self.photon_data.prob_bed, compression=comp)
+            phdat.create_dataset('is_afterpulse', data=self.photon_data.is_afterpulse, compression=comp)
 
             mfdat = f.create_group('mframe_data')
             mfdat.create_dataset('mframe', data=self.mframe_data.index, compression=comp)
@@ -1588,6 +2072,9 @@ class melt_lake:
                 dqinf.create_dataset(k, data=np.array(self.detection_quality_info[k]))
 
             props = f.create_group('properties')
+            props.create_dataset('lake_id', data=self.lake_id)
+            props.create_dataset('lake_quality', data=self.lake_quality)
+            props.create_dataset('max_depth', data=self.max_depth)
             props.create_dataset('mframe_start', data=self.mframe_start)
             props.create_dataset('mframe_end', data=self.mframe_end)
             props.create_dataset('main_peak', data=self.main_peak)
