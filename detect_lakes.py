@@ -3,6 +3,7 @@ import os
 import sys
 import pickle
 import subprocess
+import traceback
 import numpy as np
 import icelakes
 from icelakes.utilities import encedc, decedc, get_size
@@ -13,7 +14,7 @@ parser = argparse.ArgumentParser(description='Test script to print some stats fo
 parser.add_argument('--granule', type=str, default='ATL03_20220714010847_03381603_006_02.h5',
                     help='The producer_id of the input ATL03 granule')
 parser.add_argument('--polygon', type=str, default='geojsons/jakobshavn_small.geojson',
-                    help='The file path of a geojson file for spatial subsetting')
+                    help='The file path of a geojson file for spatial subsetting') # geojsons/west_greenland.geojson
 parser.add_argument('--is2_data_dir', type=str, default='IS2data',
                     help='The directory into which to download ICESat-2 granules')
 parser.add_argument('--download_gtxs', type=str, default='all',
@@ -78,14 +79,22 @@ if granule_stats[0] > 0:
 print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
 
 # for each lake call the surrf algorithm for depth determination
+# if it fails, just skip the lake, but print trackeback for the logs 
 print('---> determining depth for each lake')
-for lake in lake_list:
-    lake.surrf()
-    print('   --> %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (lake.lat,lake.lon,lake.max_depth,lake.lake_quality))
+for i, lake in enumerate(lake_list):
+    try: 
+        lake.surrf()
+        print('   --> %3i/%3i, %s | %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (i+1, len(lake_list), lake.gtx, lake.lat, 
+                                                                                 lake.lon, lake.max_depth, lake.lake_quality))
+    except:
+        print('Error for lake %i (detection quality = %.5f) ... skipping:' % (i+1, lake.detection_quality))
+        traceback.print_exc()
+        lake.lake_quality = 0.0
 
 # remove zero quality lakes
-lake_list[:] = [lake for lake in lake_list if lake.lake_quality > 0]
+# lake_list[:] = [lake for lake in lake_list if lake.lake_quality > 0]
 
+# for each lake 
 for i, lake in enumerate(lake_list):
     lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
     filename_base = 'lake_%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
@@ -102,13 +111,13 @@ for i, lake in enumerate(lake_list):
         datafile = lake.write_to_hdf5(h5name)
         print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
     except:
-        print('Could not write hdf5 file.')
-        try:
-            pklname = args.out_data_dir + '/%s.pkl' % filename_base
-            with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
-            print('Wrote data file: %s, %s' % (pklname, get_size(pklname)))
-        except:
-            print('Could not write pickle file.')
+        print('Could not write hdf5 file <%s>' % lake.lake_id)
+        # try:
+        #     pklname = args.out_data_dir + '/%s.pkl' % filename_base
+        #     with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
+        #     print('Wrote data file: %s, %s' % (pklname, get_size(pklname)))
+        # except:
+        #     print('Could not write pickle file.')
 
 statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
 with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)

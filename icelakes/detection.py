@@ -724,7 +724,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
             
 ##########################################################################################
 # merge detected lake segments iteratively
-def merge_lakes(df_mframe, max_dist_mframes=7, max_dist_elev=0.1, print_progress=False, debug=False):
+def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progress=False, debug=False):
     
     print('---> merging major frame segments that possibly represent lakes iteratively')
 
