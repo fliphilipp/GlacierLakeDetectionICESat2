@@ -1,0 +1,5 @@
+REMA Mosaic Tile Metadata
+Tile: rema_mosaic_1km
+Creation Date: 11-Jan-2023 09:41:01
+Version: 2.0
+REMA nodata region south of -88 degrees filled with 30m Copernicus GLO-30 DEM dataset
