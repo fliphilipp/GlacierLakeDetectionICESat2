@@ -4,6 +4,7 @@ import math
 import datetime
 import traceback
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 from sklearn.neighbors import KDTree
 from scipy.stats import binned_statistic
@@ -1066,6 +1067,19 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
 
     # get the data frame for the gtx and aggregate info at major frame level
     df = photon_data[gtx]
+
+    #====================================================================================
+    #====================================================================================
+    #====================================================================================
+    #====================================================================================
+    #====================================================================================
+    # TODO: CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
+    poly_nonsimplified = polygon.replace('simplified_', '')
+    gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.lon, df.lat), crs="EPSG:4326")
+    clip_shape = gpd.read_file(poly_nonsimplified)
+    gdf = gpd.clip(gdf, clip_shape).reset_index(drop=True)
+    df = pd.DataFrame(gdf.drop(columns='geometry'), copy=True)
+    
     df_mframe = make_mframe_df(df)
     
     # get all the flat segments and select
@@ -1556,13 +1570,12 @@ class melt_lake:
             maxx = np.max(np.array(ext))
         
             # take into account initial guess, if specified (needs to be dataframe with columns 'xatc' and 'h')
-            if init is not None: 
-                if len(init) > 0: 
-                    range_vweight = 10.0
-                    df_fit['heights_fit'] = np.interp(df_fit.xatc, init.xatc, init.h, left=np.nan, right=np.nan)
-                    vert_weight = (1.0 - np.clip((np.abs(df_fit.h-df_fit.heights_fit)/range_vweight),0,1)**3 )**3
-                    vert_weight[np.isnan(vert_weight)] = 0.01
-                    df_fit['vert_weight'] = vert_weight
+            if (init is not None) and (len(init) > 0): 
+                range_vweight = 10.0
+                df_fit['heights_fit'] = np.interp(df_fit.xatc, init.xatc, init.h, left=np.nan, right=np.nan)
+                vert_weight = (1.0 - np.clip((np.abs(df_fit.h-df_fit.heights_fit)/range_vweight),0,1)**3 )**3
+                vert_weight[np.isnan(vert_weight)] = 0.01
+                df_fit['vert_weight'] = vert_weight
             else: 
                 df_fit['vert_weight'] = 1.0
             
@@ -1697,7 +1710,10 @@ class melt_lake:
         
         # reduce the snr between the lake surface and initial guess, to mitigate the effect of subsurface scattering
         # (very occasionally, this can remove signal)
-        df_nosurf['init_guess'] = np.interp(df_nosurf.xatc, init_guess.xatc, init_guess.h, left=np.nan, right=np.nan)
+        if len(init_guess.h) > 0:
+            df_nosurf['init_guess'] = np.interp(df_nosurf.xatc, init_guess.xatc, init_guess.h, left=np.nan, right=np.nan)
+        else:
+            df_nosurf['init_guess'] = np.ones_like(df_nosurf.xatc) * (surf_elev - 2.0)
         reduce_snr = (df_nosurf.h > (df_nosurf.init_guess + 1.0)) & (df_nosurf.h < surf_elev)
         df_nosurf['reduce_snr_factor'] = 1.0
         reduce_snr_factor = 1.0 - 1.5*((df_nosurf.h[reduce_snr] - (df_nosurf.init_guess[reduce_snr] + 1.0)) / 
@@ -1839,6 +1855,10 @@ class melt_lake:
         from matplotlib.patches import Rectangle
         fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
 
+        if not hasattr(self, 'depth_data'):
+            print('Lake has no depth data. Skipping...')
+            return
+            
         dfd = self.depth_data
         surf_elev = self.surface_elevation
         below_surf = dfd.depth > 0.0

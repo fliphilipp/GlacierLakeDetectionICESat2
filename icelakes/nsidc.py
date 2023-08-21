@@ -105,9 +105,9 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
 
     # read in geojson file
     gdf = gpd.read_file(geojson_dir_local + geojson)
-    poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
-    polygon = ','.join([str(c) for xy in zip(*poly.exterior.coords.xy) for c in xy])
-    polygon
+    # poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    # polygon = ','.join([str(c) for xy in zip(*poly.exterior.coords.xy) for c in xy])
+    polygon = ','.join([str(c) for xy in zip(*gdf.exterior.loc[0].coords.xy) for c in xy])
     search_params = {'short_name': short_name, 'version': latest_version, 'temporal': temporal, 'page_size': 100,
                      'page_num': 1,'polygon': polygon}
 
@@ -268,7 +268,8 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     # The larger the tolerance value, the more simplified the polygon.
     # Orient counter-clockwise: CMR polygon points need to be provided in counter-clockwise order. 
     # The last point should match the first point to close the polygon.
-    poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    # poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
+    poly = orient(gdf.loc[0].geometry,sign=1.0)
 
     geojson_data = gpd.GeoSeries(poly).to_json() # Convert to geojson
     geojson_data = geojson_data.replace(' ', '') #remove spaces for API call

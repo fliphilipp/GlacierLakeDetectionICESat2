@@ -1,3 +1,7 @@
+# run locally with: 
+# $ conda activate icelakes-env
+# $ python3 detect_lakes.py --granule <granule_producer_id> --polygon geojsons/<polygon_name.geojson>
+
 import argparse
 import os
 import sys
@@ -13,7 +17,7 @@ from icelakes.detection import read_atl03, detect_lakes, melt_lake
 parser = argparse.ArgumentParser(description='Test script to print some stats for a given ICESat-2 ATL03 granule.')
 parser.add_argument('--granule', type=str, default='ATL03_20220714010847_03381603_006_02.h5',
                     help='The producer_id of the input ATL03 granule')
-parser.add_argument('--polygon', type=str, default='geojsons/jakobshavn_small.geojson',
+parser.add_argument('--polygon', type=str, default='geojsons/simplified_GRE_2500_CW.geojson',
                     help='The file path of a geojson file for spatial subsetting') # geojsons/west_greenland.geojson
 parser.add_argument('--is2_data_dir', type=str, default='IS2data',
                     help='The directory into which to download ICESat-2 granules')
