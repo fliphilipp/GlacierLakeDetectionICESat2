@@ -17,6 +17,8 @@ transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities
 
 transfer_output_files = detection_out_data, detection_out_plot, detection_out_stat
 
+stream_output = True
+stream_error = True
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 

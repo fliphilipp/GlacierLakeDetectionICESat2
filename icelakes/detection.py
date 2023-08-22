@@ -1079,6 +1079,7 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     clip_shape = gpd.read_file(poly_nonsimplified)
     gdf = gpd.clip(gdf, clip_shape).reset_index(drop=True)
     df = pd.DataFrame(gdf.drop(columns='geometry'), copy=True)
+    del gdf
     
     df_mframe = make_mframe_df(df)
     
