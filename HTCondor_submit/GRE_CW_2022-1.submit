@@ -13,7 +13,7 @@ arguments = $(granule) $(polygon)
 max_retries = 50
 success_exit_code = 69
 
-transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon), wn-geoip.tar.gz, location-wrapper.sh
+transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon), $(polygon_full), wn-geoip.tar.gz, location-wrapper.sh
 
 transfer_output_files = detection_out_data, detection_out_plot, detection_out_stat
 
@@ -28,4 +28,4 @@ request_cpus    = 1
 request_memory  = 4GB
 request_disk    = 4GB
 
-queue granule,polygon,descriptor from granule_lists/GRE_2500_CW_2022-1.csv
+queue granule,polygon,descriptor,polygon_full from granule_lists/GRE_2500_CW_2022-1.csv
