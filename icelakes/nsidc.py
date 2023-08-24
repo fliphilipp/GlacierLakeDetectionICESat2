@@ -144,7 +144,7 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
     
 
 ##########################################################################################
-@profile
+# @profile
 def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default'): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,

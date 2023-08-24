@@ -18,7 +18,7 @@ pd.set_option('mode.chained_assignment', 'raise')
 
 
 ##########################################################################################
-@profile
+# @profile
 def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
     """
     Read in an ATL03 granule. 
@@ -208,7 +208,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
         return beams_available, ancillary, dfs
 
 ##########################################################################################
-@profile
+# @profile
 def make_mframe_df(df):
     mframe_group = df.groupby('mframe')
     df_mframe = mframe_group[['lat','lon', 'xatc', 'dt']].mean()
@@ -241,7 +241,7 @@ def make_mframe_df(df):
 
 
 ##########################################################################################
-@profile
+# @profile
 def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fine=0.01, smoothing_histogram=0.1, buffer=2.0,
                             width_surf=0.1, width_buff=0.35, rel_dens_upper_thresh=5, rel_dens_lower_thresh=2,
                             min_phot=30, min_snr_surface=10, min_snr_vs_all_above=100):
@@ -386,7 +386,7 @@ def get_saturation_and_elevation(hvals, num_channels, dead_time):
 
 
 ##########################################################################################
-@profile
+# @profile
 def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.3, n_subsegs=10,
                                 bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
     
@@ -733,7 +733,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
             
 ##########################################################################################
 # merge detected lake segments iteratively
-@profile
+# @profile
 def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progress=False, debug=False):
     
     print('---> merging major frame segments that possibly represent lakes iteratively')
@@ -868,7 +868,7 @@ def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progres
 
 ##########################################################################################
 # check surroundings around lakes to extend them if needed (based on matching peak in surface elevation)
-@profile
+# @profile
 def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0.2): 
     
     print('---> checking lake edges and extending them if the surface elevation matches')
@@ -983,7 +983,7 @@ def print_results(lake_list, gtx):
 
             
 ##########################################################################################
-@profile
+# @profile
 def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=False):
     
     def ranges_overlap(range1, range2):
@@ -1067,7 +1067,7 @@ def get_gtx_stats(df_ph, lake_list):
     return gtx_stats
 
 ##########################################################################################
-@profile
+# @profile
 def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
