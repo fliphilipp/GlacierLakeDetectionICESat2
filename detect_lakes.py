@@ -1,9 +1,20 @@
+# author: Philipp Arndt, UC San Diego / Scripps Institution of Oceanography
+# 
+# intended for use on OSG OSPool, called in run_py.sh, which is called in a submit file 
+# submit file is based on a granule list queried locally in make_granule_list.ipynb 
+# see examples for submit files in: HTCondor_submit/ 
+# see examples for granule lists in:  granule_lists/
+# 
 # run locally with: 
 # $ conda activate icelakes-env
 # $ python3 detect_lakes.py --granule <granule_producer_id> --polygon geojsons/<polygon_name.geojson>
+# 
+# a call that returns a bunch of lakes
+# $ python3 detect_lakes.py --granule ATL03_20220714010847_03381603_006_02.h5 --polygon geojsons/simplified_GRE_2500_CW.geojson
 
 import argparse
 import os
+import gc
 import sys
 import pickle
 import subprocess
@@ -74,6 +85,8 @@ for gtx in gtx_list:
     lakes_found, gtx_stats = detect_lakes(input_filename, gtx, args.polygon, verbose=False)
     for i in range(len(granule_stats)): granule_stats[i] += gtx_stats[i]
     lake_list += lakes_found
+    del lakes_found, gtx_stats
+    gc.collect()
 
 if granule_stats[0] > 0:
     with open('success.txt', 'w') as f: print('we got some data from NSIDC!!', file=f)

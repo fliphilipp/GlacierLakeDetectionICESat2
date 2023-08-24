@@ -25,3 +25,4 @@ success.txt
 failed_jobs/
 granule_stats/
 zzz*
+mprofile_*.dat

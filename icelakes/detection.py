@@ -1,4 +1,5 @@
 import os
+import gc
 import h5py
 import math
 import datetime
@@ -17,6 +18,7 @@ pd.set_option('mode.chained_assignment', 'raise')
 
 
 ##########################################################################################
+@profile
 def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
     """
     Read in an ATL03 granule. 
@@ -146,9 +148,9 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
                                'ph_id_pulse': np.array(f[beam]['heights']['ph_id_pulse']),
                                'qual': np.array(f[beam]['heights']['quality_ph'])}) 
                                # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
-            if 'weight_ph' in f[beam]['heights'].keys():
-                df['weight_ph'] = np.array(f[beam]['heights']['weight_ph'])
-
+#            if 'weight_ph' in f[beam]['heights'].keys():
+#                 df['weight_ph'] = np.array(f[beam]['heights']['weight_ph'])
+# 
 #             df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
 #                                       'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
 #                                       'bckgrd_int_height': np.array(f[beam]['bckgrd_atlas']['bckgrd_int_height']),
@@ -156,7 +158,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
 
             #### calculate along-track distances [meters from the equator crossing] from segment-level data
             df['xatc'] = np.full_like(df.lat, fill_value=np.nan)
-            ph_index_beg = np.int32(f[beam]['geolocation']['ph_index_beg']) - 1
+            ph_index_beg = np.int64(f[beam]['geolocation']['ph_index_beg']) - 1
             segment_dist_x = np.array(f[beam]['geolocation']['segment_dist_x'])
             segment_length = np.array(f[beam]['geolocation']['segment_length'])
             valid = ph_index_beg>=0 # need to delete values where there's no photons in the segment (-1 value)
@@ -184,11 +186,14 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
                     geoid = np.interp(np.array(df.xatc), geophys_geoid_x, geophys_geoid)
                     df['h'] = df.h - geoid
                     df['geoid'] = geoid
+                    del geoid
                 else:
                     df['geoid'] = 0.0
 
             #### save to list of dataframes
             dfs[beam] = df
+            del df 
+            gc.collect()
             #Mdfs_bckgrd[beam] = df_bckgrd
         
         except:
@@ -203,6 +208,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
         return beams_available, ancillary, dfs
 
 ##########################################################################################
+@profile
 def make_mframe_df(df):
     mframe_group = df.groupby('mframe')
     df_mframe = mframe_group[['lat','lon', 'xatc', 'dt']].mean()
@@ -235,6 +241,7 @@ def make_mframe_df(df):
 
 
 ##########################################################################################
+@profile
 def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fine=0.01, smoothing_histogram=0.1, buffer=2.0,
                             width_surf=0.1, width_buff=0.35, rel_dens_upper_thresh=5, rel_dens_lower_thresh=2,
                             min_phot=30, min_snr_surface=10, min_snr_vs_all_above=100):
@@ -379,6 +386,7 @@ def get_saturation_and_elevation(hvals, num_channels, dead_time):
 
 
 ##########################################################################################
+@profile
 def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.3, n_subsegs=10,
                                 bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
     
@@ -725,6 +733,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
             
 ##########################################################################################
 # merge detected lake segments iteratively
+@profile
 def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progress=False, debug=False):
     
     print('---> merging major frame segments that possibly represent lakes iteratively')
@@ -859,6 +868,7 @@ def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progres
 
 ##########################################################################################
 # check surroundings around lakes to extend them if needed (based on matching peak in surface elevation)
+@profile
 def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0.2): 
     
     print('---> checking lake edges and extending them if the surface elevation matches')
@@ -973,6 +983,7 @@ def print_results(lake_list, gtx):
 
             
 ##########################################################################################
+@profile
 def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=False):
     
     def ranges_overlap(range1, range2):
@@ -1055,8 +1066,8 @@ def get_gtx_stats(df_ph, lake_list):
     gtx_stats = [length_total, length_lakes, n_photons_total, n_photons_lakes]
     return gtx_stats
 
-
 ##########################################################################################
+@profile
 def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
@@ -1066,8 +1077,7 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
 
     # get the data frame for the gtx and aggregate info at major frame level
-    df = photon_data[gtx]
-
+    #df = photon_data[gtx]
     #====================================================================================
     #====================================================================================
     #====================================================================================
@@ -1075,11 +1085,14 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     #====================================================================================
     # TODO: CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
     poly_nonsimplified = polygon.replace('simplified_', '')
-    gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.lon, df.lat), crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame(photon_data[gtx], geometry=gpd.points_from_xy(photon_data[gtx].lon, photon_data[gtx].lat), crs="EPSG:4326")
     clip_shape = gpd.read_file(poly_nonsimplified)
     gdf = gpd.clip(gdf, clip_shape).reset_index(drop=True)
     df = pd.DataFrame(gdf.drop(columns='geometry'), copy=True)
-    del gdf
+    photon_data = None
+    gdf = None
+    del gdf, photon_data, clip_shape
+    gc.collect()
     
     df_mframe = make_mframe_df(df)
     
@@ -1116,6 +1129,9 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     
     # get gtx stats
     gtx_stats = get_gtx_stats(df, thelakes)
+
+    del df, df_mframe, df_selected, df_lakes
+    gc.collect()
     
     return thelakes, gtx_stats
 
