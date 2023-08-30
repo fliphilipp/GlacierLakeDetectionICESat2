@@ -75,14 +75,16 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
     # make dictionaries for beam data to be stored in
     dfs = {}
     dfs_bckgrd = {}
-    beams_available = [x for x in list(f.keys()) if 'gt' in x]
+    all_beams = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
+    beams_available = [beam for beam in all_beams if "/%s/heights/" % beam in f]
+    
     if gtxs_to_read=='all':
         beamlist = beams_available
     elif gtxs_to_read=='none':
         beamlist = []
     else:
-        if type(gtxs_to_read)==list: beamlist = gtxs_to_read
-        elif type(gtxs_to_read)==str: beamlist = [gtxs_to_read]
+        if type(gtxs_to_read)==list: beamlist = list(set(gtxs_to_read).intersection(set(beams_available)))
+        elif type(gtxs_to_read)==str: beamlist = list(set([gtxs_to_read]).intersection(set(beams_available)))
         else: beamlist = beams_available
     
     conf_landice = 3 # index for the land ice confidence
@@ -1068,32 +1070,53 @@ def get_gtx_stats(df_ph, lake_list):
 
 ##########################################################################################
 # @profile
-def detect_lakes(input_filename, gtx, polygon, verbose=False):
-    
+def get_clipped_granule(input_filename, gtx, polygon):
     gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
     if len(photon_data)==0: return [], [0,0,0,0]
     
     print('\n-----------------------------------------------------------------------------\n')
     print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
 
-    # get the data frame for the gtx and aggregate info at major frame level
-    #df = photon_data[gtx]
-    #====================================================================================
-    #====================================================================================
-    #====================================================================================
-    #====================================================================================
-    #====================================================================================
     # TODO: CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
     poly_nonsimplified = polygon.replace('simplified_', '')
-    gdf = gpd.GeoDataFrame(photon_data[gtx], geometry=gpd.points_from_xy(photon_data[gtx].lon, photon_data[gtx].lat), crs="EPSG:4326")
+    photon_data = gpd.GeoDataFrame(photon_data[gtx], geometry=gpd.points_from_xy(photon_data[gtx].lon, photon_data[gtx].lat), crs="EPSG:4326")
     clip_shape = gpd.read_file(poly_nonsimplified)
-    gdf = gpd.clip(gdf, clip_shape).reset_index(drop=True)
-    df = pd.DataFrame(gdf.drop(columns='geometry'), copy=True)
-    photon_data = None
-    gdf = None
-    del gdf, photon_data, clip_shape
+    photon_data = gpd.clip(photon_data, clip_shape).reset_index(drop=True)
+    photon_data = pd.DataFrame(photon_data.drop(columns='geometry'), copy=True)
+    del clip_shape
     gc.collect()
+    return photon_data, ancillary
     
+
+##########################################################################################
+# @profile
+def detect_lakes(input_filename, gtx, polygon, verbose=False):
+    
+    # gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
+    # if len(photon_data)==0: return [], [0,0,0,0]
+    
+    # print('\n-----------------------------------------------------------------------------\n')
+    # print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
+
+    # # get the data frame for the gtx and aggregate info at major frame level
+    # #df = photon_data[gtx]
+    # #====================================================================================
+    # #====================================================================================
+    # #====================================================================================
+    # #====================================================================================
+    # #====================================================================================
+    # # TODO: CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
+    # poly_nonsimplified = polygon.replace('simplified_', '')
+    # gdf = gpd.GeoDataFrame(photon_data[gtx], geometry=gpd.points_from_xy(photon_data[gtx].lon, photon_data[gtx].lat), crs="EPSG:4326")
+    # clip_shape = gpd.read_file(poly_nonsimplified)
+    # gdf = gpd.clip(gdf, clip_shape).reset_index(drop=True)
+    # df = pd.DataFrame(gdf.drop(columns='geometry'), copy=True)
+    # photon_data = None
+    # gdf = None
+    # del gdf, photon_data, clip_shape
+    # gc.collect()
+
+    df, ancillary = get_clipped_granule(input_filename, gtx, polygon)
     df_mframe = make_mframe_df(df)
     
     # get all the flat segments and select
@@ -1130,6 +1153,10 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     # get gtx stats
     gtx_stats = get_gtx_stats(df, thelakes)
 
+    df = None
+    df_mframe = None
+    df_selected = None
+    df_lakes = None
     del df, df_mframe, df_selected, df_lakes
     gc.collect()
     
@@ -1218,6 +1245,7 @@ class melt_lake:
                 date=self.date_time[:10], minx=self.lon_min, miny=self.lat_min, maxx=self.lon_max, maxy=self.lat_max,
                 track=self.rgt, mptyp=mptyp, beam_nr=self.beam_number)
         self.oaurl = lake_oa_url
+        df = None
 
         
     #-------------------------------------------------------------------------------------

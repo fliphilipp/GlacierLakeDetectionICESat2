@@ -145,7 +145,7 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
 
 ##########################################################################################
 # @profile
-def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default'): 
+def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=False): 
     """
     Download a single ICESat-2 ATL03 granule based on its producer ID,
     subsets it to a given geojson file, and puts it into the specified
@@ -200,9 +200,11 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                     '/orbit_info/rgt',
                     '/orbit_info/cycle_number',
                     '/orbit_info/sc_orient',
+                    '/gtx/geolocation/segment_id',
                     '/gtx/geolocation/ph_index_beg',
                     '/gtx/geolocation/segment_dist_x',
                     '/gtx/geolocation/segment_length',
+                    '/gtx/geolocation/segment_ph_cnt',
                     '/gtx/geophys_corr/dem_h',
                     '/gtx/geophys_corr/geoid',
                     '/gtx/bckgrd_atlas/pce_mframe_cnt',
@@ -305,7 +307,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         lst3 = [value for value in lst1 if value in lst2]
         return lst3
     if vars_sub == 'all':
-        var_list_subsetting = variable_vals
+        var_list_subsetting = ''
     else:
         var_list_subsetting = intersection(variable_vals,var_list)
     
@@ -317,7 +319,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         agent = ''
         subdict = subagent[0]
         if subdict['spatialSubsettingShapefile'] == 'true':
-            Boundingshape = geojson_data
+            Boundingshape = geojson_data if spatial_sub else ''
         else:
             Boundingshape = ''
         coverage = ','.join(var_list_subsetting)
