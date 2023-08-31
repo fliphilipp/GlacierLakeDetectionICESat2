@@ -52,7 +52,7 @@ def shp2geojson(shapefile, output_directory = 'geojsons/'):
     return outfilename
     
 ##########################################################################################    
-def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None):
+def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None, return_df=True):
     """
     Query for available granules over a region of interest and a start
     and end date. This will write a csv file with one column being the 
@@ -126,7 +126,9 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
         granules.extend(results['feed']['entry'])
         search_params['page_num'] += 1
 
-    granule_list = np.unique(np.array([g['producer_granule_id'] for g in granules]))
+    granule_list, idx_unique = np.unique(np.array([g['producer_granule_id'] for g in granules]), return_index=True)
+    granules = [g for i,g in enumerate(granules) if i in idx_unique]
+    size_mb = [float(result["granule_size"]) for result in granules]
     
     print('Found %i %s version %s granules over %s between %s and %s.' % (len(granule_list), short_name, latest_version, 
                                                                           geojson, start_date, end_date))
@@ -136,11 +138,18 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
     else:
         geojson_remote = geojson_dir_remote + geojson
 
-    thisdf = pd.DataFrame({'granule': granule_list, 'geojson': geojson_remote, 'description': description})
-    if list_out_name == 'auto':
-        list_out_name = 'granule_lists/' + geojson.replace('.geojson', ''), + '_' + start_date[:4] + '.csv'
-    thisdf.to_csv(list_out_name, header=False, index=False)
-    print('Wrote file: %s' % list_out_name)
+    thisdf = pd.DataFrame({'granule': granule_list, 
+                           'geojson': geojson_remote, 
+                           'description': description, 
+                           'geojson_clip': geojson_remote.replace('simplified_', ''),
+                           'size_mb': size_mb})
+    if return_df:
+        return thisdf
+    else:
+        if list_out_name == 'auto':
+            list_out_name = 'granule_lists/' + geojson.replace('.geojson', ''), + '_' + start_date[:4] + '.csv'
+        thisdf.to_csv(list_out_name, header=False, index=False)
+        print('Wrote file: %s' % list_out_name)
     
 
 ##########################################################################################
@@ -314,15 +323,17 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     if len(subagent) < 1 :
         print('No services exist for', short_name, 'version', latest_version)
         agent = 'NO'
-        coverage,Boundingshape = '',''
+        coverage,Boundingshape,polygon = '','',''
     else:
         agent = ''
         subdict = subagent[0]
-        if subdict['spatialSubsettingShapefile'] == 'true':
-            Boundingshape = geojson_data if spatial_sub else ''
+        if (subdict['spatialSubsettingShapefile'] == 'true') and spatial_sub:
+            Boundingshape = geojson_data
         else:
-            Boundingshape = ''
+            Boundingshape, polygon = '',''
         coverage = ','.join(var_list_subsetting)
+    if (vars_sub=='all') & (not spatial_sub):
+        agent = 'NO'
         
     page_size = 100
     request_mode = 'stream'

@@ -18,7 +18,7 @@ pd.set_option('mode.chained_assignment', 'raise')
 
 
 ##########################################################################################
-# @profile
+# # @profile
 def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
     """
     Read in an ATL03 granule. 
@@ -170,7 +170,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
 
             #### now we can filter out TEP (we don't do IRF / afterpulses because it seems to not be very good...)
             df.query('qual < 3',inplace=True) 
-            # df.drop(columns=['qual'], inplace=True)
+            df.drop(columns=['qual'], inplace=True)
 
             #### sort by along-track distance (for interpolation to work smoothly)
             df.sort_values(by='xatc',inplace=True)
@@ -210,7 +210,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
         return beams_available, ancillary, dfs
 
 ##########################################################################################
-# @profile
+# # @profile
 def make_mframe_df(df):
     mframe_group = df.groupby('mframe')
     df_mframe = mframe_group[['lat','lon', 'xatc', 'dt']].mean()
@@ -735,7 +735,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
             
 ##########################################################################################
 # merge detected lake segments iteratively
-# @profile
+# # @profile
 def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progress=False, debug=False):
     
     print('---> merging major frame segments that possibly represent lakes iteratively')
@@ -870,7 +870,7 @@ def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progres
 
 ##########################################################################################
 # check surroundings around lakes to extend them if needed (based on matching peak in surface elevation)
-# @profile
+# # @profile
 def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0.2): 
     
     print('---> checking lake edges and extending them if the surface elevation matches')
@@ -985,7 +985,7 @@ def print_results(lake_list, gtx):
 
             
 ##########################################################################################
-# @profile
+# # @profile
 def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=False):
     
     def ranges_overlap(range1, range2):
@@ -1077,44 +1077,29 @@ def get_clipped_granule(input_filename, gtx, polygon):
     print('\n-----------------------------------------------------------------------------\n')
     print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
 
-    # TODO: CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
+    # CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
     poly_nonsimplified = polygon.replace('simplified_', '')
     photon_data = gpd.GeoDataFrame(photon_data[gtx], geometry=gpd.points_from_xy(photon_data[gtx].lon, photon_data[gtx].lat), crs="EPSG:4326")
     clip_shape = gpd.read_file(poly_nonsimplified)
+
+    # first just slice to the bounding box
+    lons = clip_shape.loc[0].geometry.exterior.coords.xy[0]
+    lats = clip_shape.loc[0].geometry.exterior.coords.xy[1]
+    photon_data = photon_data[(photon_data.lon > np.min(lons)) & (photon_data.lon < np.max(lons)) &
+                              (photon_data.lat > np.min(lats)) & (photon_data.lat < np.max(lats))]
+
+    # now actually clip it
     photon_data = gpd.clip(photon_data, clip_shape).reset_index(drop=True)
-    photon_data = pd.DataFrame(photon_data.drop(columns='geometry'), copy=True)
-    del clip_shape
+    df = pd.DataFrame(photon_data.drop(columns='geometry'))
+    photon_data = None
+    del photon_data, clip_shape
     gc.collect()
-    return photon_data, ancillary
+    return df, ancillary
     
 
 ##########################################################################################
 # @profile
 def detect_lakes(input_filename, gtx, polygon, verbose=False):
-    
-    # gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
-    # if len(photon_data)==0: return [], [0,0,0,0]
-    
-    # print('\n-----------------------------------------------------------------------------\n')
-    # print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
-
-    # # get the data frame for the gtx and aggregate info at major frame level
-    # #df = photon_data[gtx]
-    # #====================================================================================
-    # #====================================================================================
-    # #====================================================================================
-    # #====================================================================================
-    # #====================================================================================
-    # # TODO: CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
-    # poly_nonsimplified = polygon.replace('simplified_', '')
-    # gdf = gpd.GeoDataFrame(photon_data[gtx], geometry=gpd.points_from_xy(photon_data[gtx].lon, photon_data[gtx].lat), crs="EPSG:4326")
-    # clip_shape = gpd.read_file(poly_nonsimplified)
-    # gdf = gpd.clip(gdf, clip_shape).reset_index(drop=True)
-    # df = pd.DataFrame(gdf.drop(columns='geometry'), copy=True)
-    # photon_data = None
-    # gdf = None
-    # del gdf, photon_data, clip_shape
-    # gc.collect()
 
     df, ancillary = get_clipped_granule(input_filename, gtx, polygon)
     df_mframe = make_mframe_df(df)
