@@ -40,7 +40,7 @@ parser.add_argument('--out_plot_dir', type=str, default='detection_out_plot',
                     help='The directory to which to write the output plots')
 parser.add_argument('--out_stat_dir', type=str, default='detection_out_stat',
                     help='The directory to which to write the granule stats')
-args = parser.parse_args("")
+args = parser.parse_args()
 
 print('\npython args:', args, '\n')
 
