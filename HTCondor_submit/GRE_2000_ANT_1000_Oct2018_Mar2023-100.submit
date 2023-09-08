@@ -26,7 +26,7 @@ error         = errs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).err
 output        = outs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).out
 
 request_cpus    = 1
-request_memory  = 32GB
-request_disk    = 32GB
+request_memory  = 16GB
+request_disk    = 16GB
 
 queue granule,polygon,descriptor,polygon_full from granule_lists/GRE_2000_ANT_1000_Oct2018_Mar2023-100.csv
