@@ -193,6 +193,12 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                                uid='myuserid', 
                                pwd='mypasword')
     """
+    print('--> parameters: granule_id = %s' % granule_id)
+    print('                gtxs = %s' % gtxs)
+    print('                geojson = %s' % geojson)
+    print('                granule_output_path = %s' % granule_output_path)
+    print('                vars_sub = %s' % vars_sub)
+    print('                spatial_sub = %s\n' % spatial_sub)
     
     short_name = 'ATL03'
     version = granule_id[30:33]

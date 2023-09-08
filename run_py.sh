@@ -14,12 +14,14 @@ mv detection.py icelakes/
 mv test1 misc/
 mv test2 misc/
 mv *.geojson geojsons/
-rm success.txt
+# rm success.txt
 
 # just to not send API requests to NSDIC at once
 sleep $((RANDOM % 180))
 
 # Run the Python script 
+echo "Executing python script:"
+echo "python3 detect_lakes.py --granule $1 --polygon $2"
 python3 detect_lakes.py --granule $1 --polygon $2
 
 if [ -f "success.txt" ]; then
@@ -27,6 +29,6 @@ if [ -f "success.txt" ]; then
     exit 69
 else
     echo "No success....."
-    echo "$1" > $_CONDOR_WRAPPER_ERROR_FILE
+    echo "No success for $1 $2" > $_CONDOR_WRAPPER_ERROR_FILE
     exit 127
 fi
