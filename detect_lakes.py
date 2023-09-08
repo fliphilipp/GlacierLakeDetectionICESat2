@@ -58,7 +58,7 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
 
 # download the specified ICESat-2 data from NSIDC
 input_filename, request_status_code = download_granule(args.granule, args.download_gtxs, args.polygon, args.is2_data_dir, 
-                                             decedc(edc().u), decedc(edc().p), spatial_sub=False)
+                                             decedc(edc().u), decedc(edc().p), spatial_sub=True)
 
 # perform a bunch of checks to make sure everything went alright with the nsidc api
 print('Request status code:', request_status_code, request_status_code==200)

@@ -19,7 +19,8 @@ pd.set_option('mode.chained_assignment', 'raise')
 
 ##########################################################################################
 # # @profile
-def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
+# TODO: specify clip_shape and downcast_types actions to save on memory
+def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, downcast_types=False):
     """
     Read in an ATL03 granule. 
 
@@ -139,7 +140,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
                
             #### get photon-level data
             # if "/%s/heights/" not in f: break; # 
-             
+            
             df = pd.DataFrame({'lat': np.array(f[beam]['heights']['lat_ph']),
                                'lon': np.array(f[beam]['heights']['lon_ph']),
                                'h': np.array(f[beam]['heights']['h_ph']),
@@ -149,6 +150,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
                                'mframe': np.array(f[beam]['heights']['pce_mframe_cnt']),
                                'ph_id_pulse': np.array(f[beam]['heights']['ph_id_pulse']),
                                'qual': np.array(f[beam]['heights']['quality_ph'])}) 
+            
                                # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
 #            if 'weight_ph' in f[beam]['heights'].keys():
 #                 df['weight_ph'] = np.array(f[beam]['heights']['weight_ph'])
@@ -186,8 +188,8 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
                 # hacky fix for no weird stuff happening if geoid is undefined everywhere
                 if len(geophys_geoid>5):
                     geoid = np.interp(np.array(df.xatc), geophys_geoid_x, geophys_geoid)
-                    df['h'] = df.h - geoid
-                    df['geoid'] = geoid
+                    df['h'] = (df.h - geoid).astype(np.float32)
+                    df['geoid'] = geoid.astype(np.float16)
                     del geoid
                 else:
                     df['geoid'] = 0.0
@@ -196,7 +198,6 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all'):
             dfs[beam] = df
             del df 
             gc.collect()
-            #Mdfs_bckgrd[beam] = df_bckgrd
         
         except:
             print('Error for {f:s} on {b:s} ... skipping:'.format(f=filename, b=beam))
@@ -221,13 +222,16 @@ def make_mframe_df(df):
     df_mframe['xatc_max'] = mframe_group['xatc'].max()
     df_mframe['n_phot'] = mframe_group['h'].count()
     df_mframe['peak'] = np.nan
+    # df_mframe['is_flat'] = pd.arrays.SparseArray([False]*len(df_mframe), fill_value=False)
+    # df_mframe['lake_qual_pass'] = pd.arrays.SparseArray([False]*len(df_mframe), fill_value=False)
+    # df_mframe['has_densities'] = pd.arrays.SparseArray([False]*len(df_mframe), fill_value=False)
     df_mframe['is_flat'] = False
+    df_mframe['lake_qual_pass'] = False
+    df_mframe['has_densities'] = False
     df_mframe['snr_surf'] = 0.0
     df_mframe['snr_upper'] = 0.0
     df_mframe['snr_lower'] = 0.0
     df_mframe['snr_allabove'] = 0.0
-    df_mframe['lake_qual_pass'] = False
-    df_mframe['has_densities'] = False
     df_mframe['ratio_2nd_returns'] = 0.0
     df_mframe['alignment_penalty'] = 0.0
     df_mframe['range_penalty'] = 0.0
@@ -250,21 +254,36 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
     
     print('---> finding flat surfaces in photon data', end=' ')
 
-    df['snr'] = 0.0
+    # df['snr'] = 0.0
+    # df['is_afterpulse'] = False
+    # df['prob_afterpulse'] = 0.0
+    # df['sat_ratio'] = 0.0
+    # df['sat_ratio_smooth'] = 0.0
+    # df['sat_elev'] = np.nan
+    df['snr'] = np.zeros(len(df)).astype(np.float16)
     df['is_afterpulse'] = False
-    df['prob_afterpulse'] = 0.0
-    df['sat_ratio'] = 0.0
-    df['sat_ratio_smooth'] = 0.0
-    df['sat_elev'] = np.nan
+    df['prob_afterpulse'] = np.zeros(len(df)).astype(np.float16)
+    df['sat_ratio'] = np.zeros(len(df)).astype(np.float16)
+    df['sat_ratio_smooth'] = np.zeros(len(df)).astype(np.float16)
+    df['sat_elev'] = np.zeros(len(df)).astype(np.float32)
     df['pulseid'] = 1000*df.mframe.astype(np.uint64)+df.ph_id_pulse.astype(np.uint64)
+
+    ### jk, no sparse data types because they don't support __setitem__ with .loc[]
+    # df['snr'] = pd.arrays.SparseArray(np.zeros(len(df)).astype(np.float16), fill_value=0)
+    # df['is_afterpulse'] = pd.arrays.SparseArray([False]*len(df), fill_value=False)
+    # df['prob_afterpulse'] = pd.arrays.SparseArray(np.zeros(len(df)).astype(np.float16), fill_value=0)
+    # df['sat_ratio'] = pd.arrays.SparseArray(np.zeros(len(df)).astype(np.float32), fill_value=0)
+    # df['sat_ratio_smooth'] = pd.arrays.SparseArray(np.zeros(len(df)).astype(np.float32), fill_value=0)
+    # df['sat_elev'] = pd.arrays.SparseArray((np.zeros(len(df))*np.nan).astype(np.float32), fill_value=np.nan)
+    # df['pulseid'] = 1000*df.mframe.astype(np.uint64)+df.ph_id_pulse.astype(np.uint64)
     
     # initialize arrays for major-frame-level photon stats
-    peak_locs = np.full(len(df_mframe), np.nan, dtype=np.double)
+    peak_locs = np.full(len(df_mframe), np.nan, dtype=np.float32)
     is_flat = np.full_like(peak_locs, False, dtype=np.bool_)
-    surf_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
-    upper_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
-    lower_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
-    all_above_snr = np.full_like(peak_locs, 0.0, dtype=np.double)
+    surf_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
+    upper_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
+    lower_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
+    all_above_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
     
     for i, mframe in enumerate(df_mframe.index):
         
@@ -861,7 +880,7 @@ def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progres
                                             'surf_elev': np.array(surf_elevs)})
         
     except: 
-        print('Something went wrong getting densities and peaks for mframe %i ...' % mframe)
+        print('Something went wrong merging lakes - skipping this beam...')
         traceback.print_exc()
         df_extracted_lakes = pd.DataFrame({'mframe_start': [], 'mframe_end': [], 'surf_elev': []})
     
