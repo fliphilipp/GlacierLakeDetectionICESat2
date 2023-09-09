@@ -270,7 +270,6 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         search_params['page_num'] += 1
         
     granule_list, idx_unique = np.unique(np.array([g['producer_granule_id'] for g in granules]), return_index=True)
-    print(idx_unique)
     granules = [g for i,g in enumerate(granules) if i in idx_unique] # keeps double counting, not sure why
     print('\nDownloading ICESat-2 data. Found granules:')
     if len(granules) == 0:
@@ -282,13 +281,26 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     # Use geopandas to read in polygon file as GeoDataFrame object 
     # Note: a shapefile, KML, or almost any other vector-based spatial data format could be substituted here.
     gdf = gpd.read_file(geojson_filepath)
+
+    # make sure the two regions that go over the date line are adjusted 
+    if ('West_Ep-F.geojson' in geojson_filepath) or ('East_E-Ep.geojson' in geojson_filepath): 
+        lon180 = np.array(gdf.geometry.iloc[0].exterior.coords.xy[0])
+        lon180[lon180 < 0] = lon180[lon180 < 0]  + 360
+        gdf['geometry'] = Polygon(list(zip(lon180, gdf.geometry.iloc[0].exterior.coords.xy[1])))
+        poly = orient(gdf.loc[0].geometry,sign=1.0)
+        lon180 = np.array(poly.exterior.coords.xy[0])
+        lon180[lon180 > 180] = lon180[lon180 > 180] - 360
+        gdf['geometry'] = Polygon(list(zip(lon180, gdf.geometry.iloc[0].exterior.coords.xy[1])))
+        poly = gdf.loc[0].geometry
     
     # Simplify polygon for complex shapes in order to pass a reasonable request length to CMR. 
     # The larger the tolerance value, the more simplified the polygon.
     # Orient counter-clockwise: CMR polygon points need to be provided in counter-clockwise order. 
     # The last point should match the first point to close the polygon.
     # poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
-    poly = orient(gdf.loc[0].geometry,sign=1.0)
+    else:
+        poly = orient(gdf.loc[0].geometry,sign=1.0)
+    # poly = orient(gdf.simplify(0.05, preserve_topology=True).loc[0],sign=1.0)
 
     geojson_data = gpd.GeoSeries(poly).to_json() # Convert to geojson
     geojson_data = geojson_data.replace(' ', '') #remove spaces for API call
