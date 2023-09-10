@@ -72,7 +72,7 @@ if request_status_code != 200:
 if request_status_code==200:
     with open('success.txt', 'w') as f: print('we got some sweet data', file=f)
     if input_filename == 'none': 
-        print('granule seems to be empty. nothing more to do here.') 
+        print('no granule found. nothing more to do here.') 
         sys.exit(69)
 if os.path.exists(input_filename):
     if os.path.getsize(input_filename) < 31457280:# 30 MB
