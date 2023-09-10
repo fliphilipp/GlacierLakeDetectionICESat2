@@ -16,9 +16,9 @@ From: ubuntu:20.04
     apt-get clean
 
     # install miniconda from source (to /opt/conda to not run into root access permission issues)
-    wget https://repo.anaconda.com/miniconda/Miniconda3-4.6.14-Linux-x86_64.sh
-    bash Miniconda3-4.6.14-Linux-x86_64.sh -b -p /opt/conda
-    rm -f Miniconda3-4.6.14-Linux-x86_64.sh
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py39_23.5.2-0-Linux-x86_64.sh
+    bash Miniconda3-py39_23.5.2-0-Linux-x86_64.sh -b -p /opt/conda
+    rm -f Miniconda3-py39_23.5.2-0-Linux-x86_64.sh
 
     # add the conda environment to PATH 
     export PATH="/opt/conda/bin:$PATH"
