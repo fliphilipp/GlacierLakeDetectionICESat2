@@ -140,8 +140,11 @@ for i, lake in enumerate(lake_list):
         # except:
         #     print('Could not write pickle file.')
 
-statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
-with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i,%s' % tuple(granule_stats+[compute_latlon]), file=f)
+try:
+    statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
+    with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i' % tuple(granule_stats), file=f)
+except:
+    print("could not write stats file")
     
 # clean up the input data
 os.remove(input_filename)

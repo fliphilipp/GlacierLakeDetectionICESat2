@@ -12,7 +12,7 @@ arguments = $(granule) $(polygon)
 max_retries = 50
 success_exit_code = 69
 
-transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon), $(polygon_full), wn-geoip.tar.gz, location-wrapper.sh
+transfer_input_files = detect_lakes.py, icelakes/__init__.py, icelakes/utilities.py, icelakes/nsidc.py, icelakes/detection.py, misc/test1, misc/test2, $(polygon), $(polygon_full)
 
 transfer_output_files = detection_out_data, detection_out_plot, detection_out_stat
 

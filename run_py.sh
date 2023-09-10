@@ -14,7 +14,7 @@ mv detection.py icelakes/
 mv test1 misc/
 mv test2 misc/
 mv *.geojson geojsons/
-# rm success.txt
+# # rm success.txt
 
 # just to not send API requests to NSDIC at once
 sleep $((RANDOM % 180))
