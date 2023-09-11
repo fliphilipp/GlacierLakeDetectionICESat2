@@ -29,4 +29,4 @@ request_cpus    = 1
 request_memory  = 16GB
 request_disk    = 16GB
 
-queue granule,polygon,descriptor,polygon_full from granule_lists/GRE_2000_ANT_1000_Oct2018_Jun2023.csv
+queue granule,polygon,descriptor,polygon_full from granule_lists/ANT_1000_Nov2018_Mar2021.csv
