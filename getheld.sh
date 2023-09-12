@@ -28,12 +28,12 @@ filename_out=held_jobs/$clustername-$clusterid.csv
 # print number of jobs that fulfill the 
 totalcounter=0
 for holdreason in "${HoldReasons[@]}"; do
-    counts=$(condor_q $clusterid -hold | head -n 100 | grep "$holdreason" | wc -l);
+    counts=$(condor_q $clusterid -hold | grep "$holdreason" | wc -l);
     printf "%5i - $holdreason\n" $counts;
     totalcounter=$(expr $totalcounter + $counts);
-    condor_q $clusterid -held | head -n 100 | grep "$holdreason" | awk -F'[. ]+' '{printf "logs/*%s*-%s.*\n",$1,$2;}' | while read x; do ls $x | xargs printf "%s," >> $filename_out; echo "$holdreason" >> $filename_out; done  
+    condor_q $clusterid -held | grep "$holdreason" | awk -F'[. ]+' '{printf "logs/*%s*-%s.*\n",$1,$2;}' | while read x; do ls $x | xargs printf "%s," >> $filename_out; echo "$holdreason" >> $filename_out; done  
 done
 
 printf "%5i - TOTAL\n\n" $totalcounter;
 printf "\n%s\n" $filename_out
-cat $filename_out | wc -l | xargs printf "%s lines in file\n"
+cat $filename_out | wc -l | xargs printf "%s lines in file\n\n"
