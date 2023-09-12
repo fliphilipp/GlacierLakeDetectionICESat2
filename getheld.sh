@@ -31,7 +31,7 @@ for holdreason in "${HoldReasons[@]}"; do
     counts=$(condor_q $clusterid -hold | grep "$holdreason" | wc -l);
     printf "%5i - $holdreason\n" $counts;
     totalcounter=$(expr $totalcounter + $counts);
-    condor_q $clusterid -held | grep "$holdreason" | awk -F'[. ]+' '{printf "logs/*%s*-%s.*\n",$1,$2;}' | while read x; do ls $x | xargs printf "%s," >> $filename_out; echo "$holdreason" >> $filename_out; done  
+    condor_q $clusterid -held | grep "$holdreason" | awk -F'[. ]+' '{printf "logs/*-%s_*-%s.log*\n",$1,$2;}' | while read x; do ls $x | xargs printf "%s," >> $filename_out; echo "$holdreason" >> $filename_out; done  
 done
 
 printf "%5i - TOTAL\n\n" $totalcounter;
