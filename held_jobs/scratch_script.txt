@@ -1,0 +1,82 @@
+# specify cluster and name
+clusterid=114211
+clustername=greenland1
+
+# condor_q overview, and check for unique hold resons
+condor_q $clusterid
+condor_q $clusterid -held -af HoldReason | wc -l | xargs printf "%s total jobs on hold\n"
+condor_q $clusterid -held -af HoldReason | cut -c-11 | sort | uniq -c
+
+# define hold reasons to grep for (might need to add others if they come up)
+declare -a HoldReasons=(
+ "memory usage exceeded request_memory"
+ "The job (shadow) restarted too many times"
+ "The job restarted too many times"
+ "Transfer input files failure"
+)
+
+filename_out=held_jobs/$clustername-$clusterid.csv
+>| $filename_out
+# print number of jobs that fulfill the 
+totalcounter=0
+for holdreason in "${HoldReasons[@]}"; do
+    counts=$(condor_q $clusterid -hold | head -n 100 | grep "$holdreason" | wc -l);
+    printf "%5i - $holdreason\n" $counts;
+    totalcounter=$(expr $totalcounter + $counts);
+    condor_q $clusterid -held | head -n 100 | grep "$holdreason" | awk -F'[. ]+' '{printf "logs/*%s*-%s.*\n",$1,$2;}' | while read x; do ls $x | xargs printf "%s," >> $filename_out; echo "$holdreason" >> $filename_out; done  
+done
+
+printf "%5i - TOTAL\n\n" $totalcounter;
+echo $filename_out
+cat $filename_out | wc -l | xargs printf "%s lines in file\n"
+cat $filename_out
+
+
+############################################################
+
+
+# specify cluster and name
+clusterid=114211
+clustername=greenland1
+
+# condor_q overview, and check for unique hold resons
+condor_q $clusterid
+condor_q $clusterid -held -af HoldReason | wc -l | xargs printf "%s total jobs on hold\n"
+condor_q $clusterid -held -af HoldReason | cut -c-11 | sort | uniq -c
+
+# define hold reasons to grep for (might need to add others if they come up)
+declare -a HoldReasons=(
+ "memory usage exceeded request_memory"
+ "The job (shadow) restarted too many times"
+ "The job restarted too many times"
+ "Transfer input files failure"
+)
+
+filename_out=held_jobs/$clustername-$clusterid.csv
+>| $filename_out
+# print number of jobs that fulfill the 
+totalcounter=0
+for holdreason in "${HoldReasons[@]}"; do
+    counts=$(condor_q $clusterid -hold | head -n 100 | grep "$holdreason" | wc -l);
+    printf "%5i - $holdreason\n" $counts;
+    totalcounter=$(expr $totalcounter + $counts);
+    condor_q $clusterid -held | head -n 100 | grep "$holdreason" | awk -F'[. ]+' '{printf "errs/*%s*-%s.*\n",$1,$2;}' | while read x; do cat $x | grep "/run_py.sh" | awk -F'['"'"']+' '{printf "%s,%s,",$4,$6}' >> $filename_out; echo $holdreason >> $filename_out; done  
+done
+
+printf "%5i - TOTAL\n\n" $totalcounter;
+echo $filename_out
+cat $filename_out | wc -l | xargs printf "%s lines in file\n"
+
+
+
+# print number of jobs that fulfill the 
+totalcounter=0
+for holdreason in "${HoldReasons[@]}"; do
+    counts=$(condor_q $clusterid -hold | head -n 100 | grep "$holdreason" | wc -l);
+    printf "%5i - $holdreason\n" $counts;
+    totalcounter=$(expr $totalcounter + $counts);
+    condor_q $clusterid -hold | grep "$holdreason" | awk -F'[. ]+' '{printf "errs/*%s*-%s.*\n",$1,$2;}' | while read x; do cat $x | grep "/srv//run_py.sh" | awk -F'['"'"']+' '{printf "%s,%s,",$4,$6}' >> $filename_out; echo $holdreason >> $filename_out; done  
+done
+printf "%5i - TOTAL\n\n" $totalcounter;
+
+
