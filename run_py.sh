@@ -17,7 +17,7 @@ mv *.geojson geojsons/
 # # rm success.txt
 
 # just to not send API requests to NSDIC at once
-sleep $((RANDOM % 1800))
+sleep $((RANDOM % 1000))
 
 # Run the Python script 
 echo "Executing python script:"
@@ -29,6 +29,6 @@ if [ -f "success.txt" ]; then
     exit 69
 else
     echo "No success....."
-    echo "No success for $1 $2" > $_CONDOR_WRAPPER_ERROR_FILE
+    # echo "No success for $1 $2" > $_CONDOR_WRAPPER_ERROR_FILE
     exit 127
 fi
