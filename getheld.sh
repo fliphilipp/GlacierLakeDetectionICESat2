@@ -21,6 +21,7 @@ declare -a HoldReasons=(
  "The job (shadow) restarted too many times"
  "The job restarted too many times"
  "Transfer input files failure"
+ "Job was held manually."
 )
 
 filename_out=held_jobs/$clustername-$clusterid.csv
