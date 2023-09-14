@@ -26,7 +26,7 @@ NOTE: This repo is private for now. (early testing stage)
     - Keep track of the few jobs that ran out of memory, to run later with a higher `request_memory` requirement
     - Other jobs (usually re-started to often because of NSIDC API issues, or sometimes input file transfer failure) can be re-submitted to the pool, using a new submit file with the list generated in `resubmit_make_list.ipynb`
   - If all fails, maybe run a handful of jobs locally and troubleshoot??? / Or skip if something seems awfully off with the data…
-- Transfer back output data to a local computer.
+- Transfer back output data to a local computer with `scp`. (ideally zip the entire directory and transfer that, if you don't need the log/err/out files anymore this is sped up substantially by removing those first) 
 - There might be some weird false positives, mostly from sensor saturation artifacts over a few regions where the basins overlap with the ocean - browse through the quicklook images and manually remove files that are clearly not lakes.
 
 
