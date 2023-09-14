@@ -1,3 +1,14 @@
+condor_q
+grep 'Success!!!!!' outs/*-123983_*.out | wc -l
+grep 'No success.....' outs/*-123983_*.out | wc -l
+
+condor_q
+grep 'Success!!!!!' outs/*-123993_*.out | wc -l
+grep 'No success.....' outs/*-123993_*.out | wc -l
+
+
+###################################
+
 # specify cluster and name
 clusterid=114211
 clustername=greenland1

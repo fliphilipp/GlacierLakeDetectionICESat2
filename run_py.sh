@@ -17,7 +17,7 @@ mv *.geojson geojsons/
 # # rm success.txt
 
 # just to not send API requests to NSDIC at once
-sleep $((RANDOM % 1800))
+sleep $((RANDOM % 600))
 
 # Run the Python script 
 echo "Executing python script:"
