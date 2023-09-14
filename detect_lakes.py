@@ -45,16 +45,6 @@ args = parser.parse_args()
 
 print('\npython args:', args, '\n')
 
-# try to figure out where the script is being executed (just to show those maps at conferences, etc...)
-# try:
-#     with open('location-wrapper.sh', 'rb') as file: script = file.read()
-#     geoip_out = subprocess.run(script, shell=True, capture_output=True)
-#     compute_latlon = str(geoip_out.stdout)[str(geoip_out.stdout).find('<x><y><z>')+9 : str(geoip_out.stdout).find('<z><y><x>')]
-#     print('\nThis job is running at the following lat/lon location:%s\n' % compute_latlon)
-# except:
-#     compute_latlon='0.0,0.0'
-#     print('\nUnable to determine compute location for this script.\n')
-
 # shuffling files around for HTCondor
 print('Shuffling files around for HTCondor...')
 for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
@@ -64,20 +54,26 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
 try_nr = 1
 request_status_code = 0
 while (request_status_code != 200) & (try_nr <= 15):
-    print('Downloading granule from NSIDC. (try %i)' % try_nr)
-    input_filename, request_status_code = download_granule(
-        args.granule, 
-        args.download_gtxs, 
-        args.polygon, 
-        args.is2_data_dir, 
-        decedc(edc().u), 
-        decedc(edc().p), 
-        spatial_sub=True
-    )
-    if request_status_code != 200:
-        print('  --> Request unsuccessful (%i), trying again in a minute...' % request_status_code)
-    time.sleep(60)
-    try_nr += 1
+    try:
+        print('Downloading granule from NSIDC. (try %i)' % try_nr)
+        input_filename, request_status_code = download_granule(
+            args.granule, 
+            args.download_gtxs, 
+            args.polygon, 
+            args.is2_data_dir, 
+            decedc(edc().u), 
+            decedc(edc().p), 
+            spatial_sub=True
+        )
+        if request_status_code != 200:
+            print('  --> Request unsuccessful (%i), trying again in a minute...' % request_status_code)
+        time.sleep(60)
+        try_nr += 1
+        
+    except:
+        print('  --> Request unsuccessful, trying again in a minute...')
+        time.sleep(60)
+        try_nr += 1
 
 # perform a bunch of checks to make sure everything went alright with the nsidc api
 print('Request status code:', request_status_code, request_status_code==200)
@@ -103,15 +99,18 @@ lake_list = []
 granule_stats = [0,0,0,0]
 
 for gtx in gtx_list:
-    lakes_found, gtx_stats = detect_lakes(input_filename, gtx, args.polygon, verbose=False)
-    for i in range(len(granule_stats)): granule_stats[i] += gtx_stats[i]
-    lake_list += lakes_found
-    del lakes_found, gtx_stats
-    gc.collect()
+    try:
+        lakes_found, gtx_stats = detect_lakes(input_filename, gtx, args.polygon, verbose=False)
+        for i in range(len(granule_stats)): granule_stats[i] += gtx_stats[i]
+        lake_list += lakes_found
+        del lakes_found, gtx_stats
+        gc.collect()
+    except:
+        print('Something went wrong for %s' % gtx)
 
 if granule_stats[0] > 0:
-    with open('success.txt', 'w') as f: print('we got some data from NSIDC!!', file=f)
-    print('Sucessfully retrieved data from NSIDC!!')
+    with open('success.txt', 'w') as f: print('we got some useable data from NSIDC!!', file=f)
+    print('Sucessfully got some useable data from NSIDC!!')
     
 # print stats for granule
 print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
@@ -134,28 +133,29 @@ for i, lake in enumerate(lake_list):
 
 # for each lake 
 for i, lake in enumerate(lake_list):
-    lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
-    filename_base = 'lake_%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
-                                                       lake.ice_sheet, lake.melt_season, 
-                                                       lake.lake_id)
-    # plot each lake and save to image
-    fig = lake.plot_lake(closefig=True)
-    figname = args.out_plot_dir + '/%s.jpg' % filename_base
-    if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
-    
-    # export each lake to h5 and pickle
     try:
-        h5name = args.out_data_dir + '/%s.h5' % filename_base
-        datafile = lake.write_to_hdf5(h5name)
-        print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
+        lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
+        filename_base = 'lake_%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
+                                                           lake.ice_sheet, lake.melt_season, 
+                                                           lake.lake_id)
+        # plot each lake and save to image
+        try:
+            fig = lake.plot_lake(closefig=True)
+            figname = args.out_plot_dir + '/%s.jpg' % filename_base
+            if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
+        except:
+            print('Could not make figure for lake <%s>' % lake.lake_id)
+        
+        # export each lake to h5 and pickle
+        try:
+            h5name = args.out_data_dir + '/%s.h5' % filename_base
+            datafile = lake.write_to_hdf5(h5name)
+            print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
+        except:
+            print('Could not write hdf5 file <%s>' % lake.lake_id)
+            
     except:
-        print('Could not write hdf5 file <%s>' % lake.lake_id)
-        # try:
-        #     pklname = args.out_data_dir + '/%s.pkl' % filename_base
-        #     with open(pklname, 'wb') as f: pickle.dump(vars(lake), f)
-        #     print('Wrote data file: %s, %s' % (pklname, get_size(pklname)))
-        # except:
-        #     print('Could not write pickle file.')
+        pass
 
 try:
     statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
