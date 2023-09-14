@@ -65,8 +65,15 @@ try_nr = 1
 request_status_code = 0
 while (request_status_code != 200) & (try_nr <= 15):
     print('Downloading granule from NSIDC. (try %i)' % try_nr)
-    input_filename, request_status_code = download_granule(args.granule, args.download_gtxs, args.polygon, args.is2_data_dir, 
-                                                 decedc(edc().u), decedc(edc().p), spatial_sub=True)
+    input_filename, request_status_code = download_granule(
+        args.granule, 
+        args.download_gtxs, 
+        args.polygon, 
+        args.is2_data_dir, 
+        decedc(edc().u), 
+        decedc(edc().p), 
+        spatial_sub=True
+    )
     if request_status_code != 200:
         print('  --> Request unsuccessful (%i), trying again in a minute...' % request_status_code)
     time.sleep(60)
