@@ -16,6 +16,7 @@ import argparse
 import os
 import gc
 import sys
+import time
 import pickle
 import subprocess
 import traceback
@@ -28,7 +29,7 @@ from icelakes.detection import read_atl03, detect_lakes, melt_lake
 parser = argparse.ArgumentParser(description='Test script to print some stats for a given ICESat-2 ATL03 granule.')
 parser.add_argument('--granule', type=str, default='ATL03_20220714010847_03381603_006_02.h5',
                     help='The producer_id of the input ATL03 granule')
-parser.add_argument('--polygon', type=str, default='geojsons/simplified_GRE_2500_CW.geojson',
+parser.add_argument('--polygon', type=str, default='geojsons/simplified_GRE_2000_CW.geojson',
                     help='The file path of a geojson file for spatial subsetting') # geojsons/west_greenland.geojson
 parser.add_argument('--is2_data_dir', type=str, default='IS2data',
                     help='The directory into which to download ICESat-2 granules')
@@ -60,12 +61,21 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
     if not os.path.exists(thispath): os.makedirs(thispath)
 
 # download the specified ICESat-2 data from NSIDC
-print('Downloading granule from NSIDC.')
-input_filename, request_status_code = download_granule(args.granule, args.download_gtxs, args.polygon, args.is2_data_dir, 
-                                             decedc(edc().u), decedc(edc().p), spatial_sub=True)
+try_nr = 1
+request_status_code = 0
+while (request_status_code != 200) & (try_nr <= 15):
+    print('Downloading granule from NSIDC. (try %i)' % try_nr)
+    input_filename, request_status_code = download_granule(args.granule, args.download_gtxs, args.polygon, args.is2_data_dir, 
+                                                 decedc(edc().u), decedc(edc().p), spatial_sub=True)
+    if request_status_code != 200:
+        print('  --> Request unsuccessful (%i), trying again in a minute...' % request_status_code)
+    time.sleep(60)
+    try_nr += 1
 
 # perform a bunch of checks to make sure everything went alright with the nsidc api
 print('Request status code:', request_status_code, request_status_code==200)
+if request_status_code == 200:
+    print('NSIDC API request was successful!')
 if request_status_code != 200:
     print('NSIDC API request failed. (Request status code: %i)' % request_status_code)
     sys.exit(127)
