@@ -53,7 +53,7 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
 # download the specified ICESat-2 data from NSIDC
 try_nr = 1
 request_status_code = 0
-while (request_status_code != 200) & (try_nr <= 15):
+while (request_status_code != 200) & (try_nr <= 50):
     try:
         print('Downloading granule from NSIDC. (try %i)' % try_nr)
         input_filename, request_status_code = download_granule(
