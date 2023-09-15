@@ -1151,6 +1151,7 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
             thelakes.append(thislake)
     
     # remove any duplicates and make sure data segments don't overlap into other lakes' water surfaces
+    print('...removing duplicate lakes')
     thelakes = remove_duplicate_lakes(thelakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=verbose)          
     print_results(thelakes, gtx)
     

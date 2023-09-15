@@ -66,12 +66,12 @@ while (request_status_code != 200) & (try_nr <= 15):
             spatial_sub=True
         )
         if request_status_code != 200:
-            print('  --> Request unsuccessful (%i), trying again in a minute...' % request_status_code)
+            print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
         time.sleep(60)
         try_nr += 1
         
     except:
-        print('  --> Request unsuccessful, trying again in a minute...')
+        print('  --> Request unsuccessful, trying again in a minute...\n')
         time.sleep(60)
         try_nr += 1
 
@@ -108,12 +108,24 @@ for gtx in gtx_list:
     except:
         print('Something went wrong for %s' % gtx)
 
-if granule_stats[0] > 0:
-    with open('success.txt', 'w') as f: print('we got some useable data from NSIDC!!', file=f)
-    print('Sucessfully got some useable data from NSIDC!!')
+try:
+    if granule_stats[0] > 0:
+        with open('success.txt', 'w') as f: print('we got some useable data from NSIDC!!', file=f)
+        print('Sucessfully got some useable data from NSIDC!!')
+except:
+    pass
     
 # print stats for granule
-print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
+try:
+    print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
+except:
+    pass
+
+try:
+    max_lake_length = 20000 # meters (there are no lakes >20km and it's usually where something went wrong over the ocean)
+    lake_list[:] = [lake for lake in lake_list if (lake.photon_data.xatc.max()-lake.photon_data.xatc.min()) <= max_lake_length]
+except:
+    pass
 
 # for each lake call the surrf algorithm for depth determination
 # if it fails, just skip the lake, but print trackeback for the logs 
@@ -135,31 +147,42 @@ for i, lake in enumerate(lake_list):
 for i, lake in enumerate(lake_list):
     try:
         lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
-        filename_base = 'lake_%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
-                                                           lake.ice_sheet, lake.melt_season, 
-                                                           lake.lake_id)
+        filename_base = 'lake_%05i-%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
+                                                     np.clip(1.0-lake.detection_quality,0,1)*1e4,
+                                                     lake.ice_sheet, lake.melt_season, 
+                                                     lake.lake_id)
+        figname = args.out_plot_dir + '/%s.jpg' % filename_base
+        h5name = args.out_data_dir + '/%s.h5' % filename_base
+        
         # plot each lake and save to image
         try:
             fig = lake.plot_lake(closefig=True)
-            figname = args.out_plot_dir + '/%s.jpg' % filename_base
             if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
         except:
             print('Could not make figure for lake <%s>' % lake.lake_id)
         
         # export each lake to h5 and pickle
         try:
-            h5name = args.out_data_dir + '/%s.h5' % filename_base
             datafile = lake.write_to_hdf5(h5name)
             print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
         except:
             print('Could not write hdf5 file <%s>' % lake.lake_id)
+
+        # only keep files where it was possible to both write the figure and the data file
+        if os.path.isfile(figname) and (not os.path.isfile(h5name)):
+            os.remove(figname)
+        if os.path.isfile(h5name) and (not os.path.isfile(figname)):
+            os.remove(h5name)
             
     except:
         pass
 
 try:
-    statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''), args.granule[:-4])
-    with open(statsfname, 'w') as f: print('%.3f,%.3f,%i,%i' % tuple(granule_stats), file=f)
+    statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''),
+                                                           args.granule.replace('.h5',''))
+    stats = [args.polygon[args.polygon.rfind('/')+1:].replace('simplified_', ''), args.granule]
+    stats += granule_stats
+    with open(statsfname, 'w') as f: print('%s,%s,%.3f,%.3f,%i,%i' % tuple(stats), file=f)
 except:
     print("could not write stats file")
     
