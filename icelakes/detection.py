@@ -1523,18 +1523,20 @@ class melt_lake:
 
             # add latitude
             #_________________________________________________________
-            lx = self.photon_data.sort_values(by='lat').iloc[[0,-1]][['lat','xatc']].reset_index(drop=True)
-            lat = np.array(lx.lat)
-            xatc = np.array(lx.xatc)
-            def forward(x):
-                return lat[0] + x * (lat[1] - lat[0]) / (xatc[1] - xatc[0])
-            def inverse(l):
-                return xatc[0] + l * (xatc[1] - xatc[0]) / (lat[1] - lat[0])
-            secax = ax.secondary_xaxis(-0.065, functions=(forward, inverse))
+            lx = self.photon_data.sort_values(by='xatc').iloc[[0,-1]][['xatc','lat']].reset_index(drop=True)
+            _lat = np.array(lx.lat)
+            _xatc = np.array(lx.xatc)
+            def lat2xatc(l):
+                return _xatc[0] + (l - _lat[0]) * (_xatc[1] - _xatc[0]) /(_lat[1] - _lat[0])
+            def xatc2lat(x):
+                return _lat[0] + (x - _xatc[0]) * (_lat[1] - _lat[0]) / (_xatc[1] - _xatc[0])
+            secax = ax.secondary_xaxis(-0.065, functions=(xatc2lat, lat2xatc))
             secax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-            secax.set_xlabel('latitude / along-track distance',fontsize=8,labelpad=0)
+            secax.set_xlabel('latitude / along-track distance (km)',fontsize=8,labelpad=0)
             secax.tick_params(axis='both', which='major', labelsize=7)
-            secax.ticklabel_format(useOffset=False) # show actual readable latitude values
+            # secax.ticklabel_format(useOffset=False) # show actual readable latitude values
+            secax.ticklabel_format(useOffset=False, style='plain')
+            ax.ticklabel_format(useOffset=False, style='plain')
 
             # rename x ticks
             xticklabs = ['%g km' % (xt/1000) for xt in list(ax.get_xticks())]
@@ -1999,18 +2001,20 @@ class melt_lake:
 
         # add latitude
         #_________________________________________________________
-        lx = self.photon_data.sort_values(by='lat').iloc[[0,-1]][['lat','xatc']].reset_index(drop=True)
-        lat = np.array(lx.lat)
-        xatc = np.array(lx.xatc)
-        def forward(x):
-            return lat[0] + x * (lat[1] - lat[0]) / (xatc[1] - xatc[0])
-        def inverse(l):
-            return xatc[0] + l * (xatc[1] - xatc[0]) / (lat[1] - lat[0])
-        secax = ax.secondary_xaxis(-0.065, functions=(forward, inverse))
+        lx = self.photon_data.sort_values(by='xatc').iloc[[0,-1]][['xatc','lat']].reset_index(drop=True)
+        _lat = np.array(lx.lat)
+        _xatc = np.array(lx.xatc)
+        def lat2xatc(l):
+            return _xatc[0] + (l - _lat[0]) * (_xatc[1] - _xatc[0]) /(_lat[1] - _lat[0])
+        def xatc2lat(x):
+            return _lat[0] + (x - _xatc[0]) * (_lat[1] - _lat[0]) / (_xatc[1] - _xatc[0])
+        secax = ax.secondary_xaxis(-0.065, functions=(xatc2lat, lat2xatc))
         secax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-        secax.set_xlabel('latitude / along-track distance',fontsize=8,labelpad=0)
+        secax.set_xlabel('latitude / along-track distance (km)',fontsize=8,labelpad=0)
         secax.tick_params(axis='both', which='major', labelsize=7)
-        secax.ticklabel_format(useOffset=False) # show actual readable latitude values
+        # secax.ticklabel_format(useOffset=False) # show actual readable latitude values
+        secax.ticklabel_format(useOffset=False, style='plain')
+        ax.ticklabel_format(useOffset=False, style='plain')
 
         # rename x ticks
         xticklabs = ['%g km' % (xt/1000) for xt in list(ax.get_xticks())]

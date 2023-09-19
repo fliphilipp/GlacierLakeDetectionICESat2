@@ -6,6 +6,8 @@ condor_q
 grep 'Success!!!!!' outs/*-123993_*.out | wc -l
 grep 'No success.....' outs/*-123993_*.out | wc -l
 
+filename_out=stats_combined.csv; >| $filename_out; for f in detection_out_stat/stat*.csv; do cat "${f}" >> $filename_out; done
+
 
 ###################################
 

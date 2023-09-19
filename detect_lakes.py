@@ -10,7 +10,9 @@
 # $ python3 detect_lakes.py --granule <granule_producer_id> --polygon geojsons/<polygon_name.geojson>
 # 
 # a call that returns a bunch of lakes
-# $ python3 detect_lakes.py --granule ATL03_20220714010847_03381603_006_02.h5 --polygon geojsons/simplified_GRE_2500_CW.geojson
+# $ python3 detect_lakes.py --granule ATL03_20220714010847_03381603_006_02.h5 --polygon geojsons/simplified_GRE_2000_CW.geojson
+# one with more than 100 lakes
+# $ python3 detect_lakes.py --granule ATL03_20210729062325_05441205_006_01.h5 --polygon geojsons/simplified_GRE_2000_SW.geojson
 
 import argparse
 import os
@@ -67,11 +69,12 @@ while (request_status_code != 200) & (try_nr <= 50):
         )
         if request_status_code != 200:
             print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
-        time.sleep(60)
-        try_nr += 1
+            time.sleep(60)
+            try_nr += 1
         
     except:
-        print('  --> Request unsuccessful, trying again in a minute...\n')
+        print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
+        traceback.print_exc()
         time.sleep(60)
         try_nr += 1
 
@@ -107,25 +110,26 @@ for gtx in gtx_list:
         gc.collect()
     except:
         print('Something went wrong for %s' % gtx)
+        traceback.print_exc()
 
 try:
     if granule_stats[0] > 0:
         with open('success.txt', 'w') as f: print('we got some useable data from NSIDC!!', file=f)
         print('Sucessfully got some useable data from NSIDC!!')
 except:
-    pass
+    traceback.print_exc()
     
 # print stats for granule
 try:
     print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
 except:
-    pass
+    traceback.print_exc()
 
 try:
     max_lake_length = 20000 # meters (there are no lakes >20km and it's usually where something went wrong over the ocean)
     lake_list[:] = [lake for lake in lake_list if (lake.photon_data.xatc.max()-lake.photon_data.xatc.min()) <= max_lake_length]
 except:
-    pass
+    traceback.print_exc()
 
 # for each lake call the surrf algorithm for depth determination
 # if it fails, just skip the lake, but print trackeback for the logs 
@@ -160,6 +164,7 @@ for i, lake in enumerate(lake_list):
             if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
         except:
             print('Could not make figure for lake <%s>' % lake.lake_id)
+            traceback.print_exc()
         
         # export each lake to h5 and pickle
         try:
@@ -167,6 +172,7 @@ for i, lake in enumerate(lake_list):
             print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
         except:
             print('Could not write hdf5 file <%s>' % lake.lake_id)
+            traceback.print_exc()
 
         # only keep files where it was possible to both write the figure and the data file
         if os.path.isfile(figname) and (not os.path.isfile(h5name)):
@@ -175,7 +181,7 @@ for i, lake in enumerate(lake_list):
             os.remove(h5name)
             
     except:
-        pass
+        traceback.print_exc()
 
 try:
     statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''),
@@ -185,6 +191,7 @@ try:
     with open(statsfname, 'w') as f: print('%s,%s,%.3f,%.3f,%i,%i' % tuple(stats), file=f)
 except:
     print("could not write stats file")
+    traceback.print_exc()
     
 # clean up the input data
 os.remove(input_filename)

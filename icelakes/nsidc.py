@@ -219,21 +219,22 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                     '/gtx/geolocation/segment_dist_x',
                     '/gtx/geolocation/segment_length',
                     '/gtx/geolocation/segment_ph_cnt',
-                    '/gtx/geophys_corr/dem_h',
+                    # '/gtx/geophys_corr/dem_h',
                     '/gtx/geophys_corr/geoid',
-                    '/gtx/bckgrd_atlas/pce_mframe_cnt',
-                    '/gtx/bckgrd_atlas/bckgrd_counts',
-                    '/gtx/bckgrd_atlas/bckgrd_int_height',
-                    '/gtx/bckgrd_atlas/delta_time',
+                    # '/gtx/bckgrd_atlas/pce_mframe_cnt',
+                    # '/gtx/bckgrd_atlas/bckgrd_counts',
+                    # '/gtx/bckgrd_atlas/bckgrd_int_height',
+                    # '/gtx/bckgrd_atlas/delta_time',
                     '/gtx/heights/lat_ph',
                     '/gtx/heights/lon_ph',
                     '/gtx/heights/h_ph',
-                    '/gtx/heights/dist_ph_along',
                     '/gtx/heights/delta_time',
+                    '/gtx/heights/dist_ph_along',
+                    '/gtx/heights/quality_ph',
+                    # '/gtx/heights/signal_conf_ph',
                     '/gtx/heights/pce_mframe_cnt',
-                    '/gtx/heights/ph_id_pulse',
-                    '/gtx/heights/signal_conf_ph',
-                    '/gtx/heights/quality_ph']
+                    '/gtx/heights/ph_id_pulse'
+                    ]
         if int(version) > 5:
             vars_sub.append('/gtx/heights/weight_ph')
     beam_list = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
@@ -314,7 +315,22 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     s = session.get(capability_url)
     response = session.get(s.url,auth=(uid,pwd))
 
-    root = ET.fromstring(response.content)
+    try:
+        root = ET.fromstring(response.content)
+    except:
+        try:
+            cont = str(request._content)
+            print('request status code:', request.status_code)
+            the_code = cont[cont.find('<Code>')+6:cont.find('</Code>')]
+            if len(the_code) < 1000:
+                print(the_code)
+            the_message = cont[cont.find('<Message>')+9:cont.find('</Message>')]
+            if len(the_message) < 5000:
+                print(the_message)
+            print('')
+            return 'none', response.status_code
+        except:
+            return 'none', response.status_code
 
     #collect lists with each service option
     subagent = [subset_agent.attrib for subset_agent in root.iter('SubsetAgent')]
@@ -344,7 +360,8 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         agent = ''
         subdict = subagent[0]
         if (subdict['spatialSubsettingShapefile'] == 'true') and spatial_sub:
-            Boundingshape = geojson_data
+            ######################################## Boundingshape = geojson_data
+            Boundingshape = polygon
         else:
             Boundingshape, polygon = '',''
         coverage = ','.join(var_list_subsetting)
@@ -395,6 +412,12 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         print('Requesting...')
         request = session.get(base_url, params=param_dict)
         print('HTTP response from order response URL: ', request.status_code)
+        # try: 
+        #     cont = str(request._content)
+        #     print(cont[cont.find('<Code>')+6:cont.find('</Code>')],
+        #       '(', cont[cont.find('<Message>')+9:cont.find('</Message>')], ')\n')
+        # except:
+        #     pass
         request.raise_for_status()
         d = request.headers['content-disposition']
         fname = re.findall('filename=(.+)', d)
