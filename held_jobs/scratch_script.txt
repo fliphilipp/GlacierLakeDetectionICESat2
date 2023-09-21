@@ -10,12 +10,23 @@ condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manual
 # to transfer data back
 # make sure to combine stats files before and delete outs/logs/errs (zip before if want to keep) 
 scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESat2 /Volumes/nox/Philipp/<folder_name>
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/gld2except91granules.tar.gz /Volumes/nox/Philipp/IceLakesRun2
 
 ###################################
 # to combine all output stats into one file
 filename_out=stats_combined.csv; >| $filename_out; for f in detection_out_stat/stat*.csv; do cat "${f}" >> $filename_out; done
 
+###################################
+# to zip files to get them transferred
 tar -czvf name-of-archive.tar.gz /path/to/directory-or-file
+# unzip
+tar -xvzf name-of-archive.tar.gz
+
+# in home directory:
+tar -czvf /ospool/ap21/data/fliphilipp/gld_data/gld2except91granules.tar.gz GlacierLakeDetectionICESat2
+
+# on lumos / nox
+tar -czvf gld2except91granules_renamed.tar.gz GlacierLakeDetectionICESat2
 
 ###################################
 # to completely clean up outputs 
