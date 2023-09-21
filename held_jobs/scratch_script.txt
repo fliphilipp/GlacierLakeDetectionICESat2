@@ -25,8 +25,10 @@ tar -xvzf name-of-archive.tar.gz
 # in home directory:
 tar -czvf /ospool/ap21/data/fliphilipp/gld_data/gld2except91granules.tar.gz GlacierLakeDetectionICESat2
 
-# on lumos / nox
-tar -czvf gld2except91granules_renamed.tar.gz GlacierLakeDetectionICESat2
+# on lumos / nox (after renaming)
+tar -czvf gld<description>_renamed.tar.gz GlacierLakeDetectionICESat2
+
+scp -i ~/.ssh/lumosKey parndt@132.239.169.168:/Volumes/nox/Philipp/IceLakesRun2/gld2except91granules_renamed.tar.gz /mnt/c/Users/phili/Documents/IceLakesRun2
 
 ###################################
 # to completely clean up outputs 

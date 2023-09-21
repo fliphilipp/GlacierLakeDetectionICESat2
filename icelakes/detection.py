@@ -104,17 +104,21 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
     orient_str = orient_string(orient)
     gtl = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     beam_strength_dict = {k:['weak','strong'][k%2] for k in np.arange(1,7,1)}
-    if orient_str == 'forward':
-        bl = np.arange(6,0,-1)
-        gtx_beam_dict = {k:v for (k,v) in zip(gtl,bl)}
-        gtx_strength_dict = {k:beam_strength_dict[gtx_beam_dict[k]] for k in gtl}
-    elif orient_str == 'backward':
+    if orient_str == 'backward':
         bl = np.arange(1,7,1)
         gtx_beam_dict = {k:v for (k,v) in zip(gtl,bl)}
         gtx_strength_dict = {k:beam_strength_dict[gtx_beam_dict[k]] for k in gtl}
     else:
-        gtx_beam_dict = {k:'undefined' for k in gtl}
-        gtx_strength_dict = {k:'undefined' for k in gtl}
+        bl = np.arange(6,0,-1)
+        gtx_beam_dict = {k:v for (k,v) in zip(gtl,bl)}
+        gtx_strength_dict = {k:beam_strength_dict[gtx_beam_dict[k]] for k in gtl}
+    # elif orient_str == 'forward':
+    #     bl = np.arange(6,0,-1)
+    #     gtx_beam_dict = {k:v for (k,v) in zip(gtl,bl)}
+    #     gtx_strength_dict = {k:beam_strength_dict[gtx_beam_dict[k]] for k in gtl}
+    # else:
+    #     gtx_beam_dict = {k:'undefined' for k in gtl}
+    #     gtx_strength_dict = {k:'undefined' for k in gtl}
         
 
     ancillary = {'granule_id': granule_id,
