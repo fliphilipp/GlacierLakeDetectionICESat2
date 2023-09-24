@@ -91,7 +91,8 @@ if request_status_code==200:
         print('no granule found. nothing more to do here.') 
         sys.exit(69)
 if os.path.exists(input_filename):
-    if os.path.getsize(input_filename) < 31457280:# 30 MB
+    # if os.path.getsize(input_filename) < 31457280:# 30 MB
+    if os.path.getsize(input_filename) < 1000000: # 2 MB
         print('granule seems to be empty. nothing more to do here.') 
         sys.exit(69)
 

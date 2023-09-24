@@ -12,6 +12,8 @@ condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manual
 scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESat2 /Volumes/nox/Philipp/<folder_name>
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/gld2except91granules.tar.gz /Volumes/nox/Philipp/IceLakesRun2
 
+scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESat2/detection_out_data /Volumes/nox/Philipp/IceLakesRun2/extra_data
+
 ###################################
 # to combine all output stats into one file
 filename_out=stats_combined.csv; >| $filename_out; for f in detection_out_stat/stat*.csv; do cat "${f}" >> $filename_out; done
@@ -29,6 +31,8 @@ tar -czvf /ospool/ap21/data/fliphilipp/gld_data/gld2except91granules.tar.gz Glac
 tar -czvf gld<description>_renamed.tar.gz GlacierLakeDetectionICESat2
 
 scp -i ~/.ssh/lumosKey parndt@132.239.169.168:/Volumes/nox/Philipp/IceLakesRun2/gld2except91granules_renamed.tar.gz /mnt/c/Users/phili/Documents/IceLakesRun2
+
+scp -i ~/.ssh/lumosKey /mnt/c/Users/phili/Documents/IceLakesRun2/GlacierLakeDetectionICESat2/lakelistgood_temp20230922.csv parndt@132.239.169.168:/Users/parndt/jupyterprojects/GlacierLakeAnalysisICESat-2/
 
 ###################################
 # to completely clean up outputs 

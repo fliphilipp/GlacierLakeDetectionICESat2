@@ -51,7 +51,7 @@ def shp2geojson(shapefile, output_directory = 'geojsons/'):
     return outfilename
     
 ##########################################################################################    
-def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None, return_df=True):
+def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_out_name, geojson_dir_local='geojsons/', geojson_dir_remote=None, return_df=True, version=None):
     """
     Query for available granules over a region of interest and a start
     and end date. This will write a csv file with one column being the 
@@ -99,8 +99,11 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
     results = json.loads(response.content)
 
     # Find all instances of 'version_id' in metadata and print most recent version number
-    versions = [el['version_id'] for el in results['feed']['entry']]
-    latest_version = max(versions)
+    if not version:
+        versions = [el['version_id'] for el in results['feed']['entry']]
+        latest_version = max(versions)
+    else:
+        latest_version = version
     capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/{short_name}.{latest_version}.xml'
 
     # read in geojson file
