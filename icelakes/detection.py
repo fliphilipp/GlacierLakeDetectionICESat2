@@ -677,16 +677,16 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     selector_subseg = ((dfseg.xatc > subsegstart) & (dfseg.xatc < subsegend))
                     dfsubseg = dfseg[selector_subseg].copy()
 
-                    # ---> if the pulses are highly saturated don't check for peaks lower than 13 meters depths 
-                    # (then photomultiplier tube ionization effects become a problem)
-                    # this is a bit of a dirty fix, but for lake detection it's probably better to throw out some highly
-                    # saturated data, and almost all lakes that actually have a signal deeper than 13m will most likely
-                    # have a very strong signal near their edges, so they should still be detected
-                    avg_saturation = np.nanmean(dfsubseg.sat_ratio)
-                    maxdepth_2nd_return = 50.0 if avg_saturation < 3.5 else 13.0
-
                     # avoid looking for peaks when there's no / very little data
                     if len(dfsubseg > 10):
+                        
+                        # ---> if the pulses are highly saturated don't check for peaks lower than 13 meters depths 
+                        # (then photomultiplier tube ionization effects become a problem)
+                        # this is a bit of a dirty fix, but for lake detection it's probably better to throw out some highly
+                        # saturated data, and almost all lakes that actually have a signal deeper than 13m will most likely
+                        # have a very strong signal near their edges, so they should still be detected
+                        avg_saturation = np.nanmean(dfsubseg.sat_ratio)
+                        maxdepth_2nd_return = 50.0 if avg_saturation < 3.5 else 13.0
                         
                          # get the median of the snr values in each bin
                         bins_subseg_snr = np.arange(start=np.max((dfsubseg.h.min()-3.0,peak_loc2-maxdepth_2nd_return)), 
