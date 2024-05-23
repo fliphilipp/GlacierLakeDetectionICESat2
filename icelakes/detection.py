@@ -1713,8 +1713,8 @@ class melt_lake:
 
             # add mframe info text
             if print_mframe_info:
-                txt  = 'mframe:\n' % (mf.name%1000)
-                txt += 'photons:\n' % mf.n_phot
+                txt  = 'mframe:\n'
+                txt += 'photons:\n'
                 txt += 'peak:\n'
                 txt += 'flat:\n'
                 txt += 'SNR surf all:\n'
@@ -2192,8 +2192,8 @@ class melt_lake:
 
         # add mframe info text
         if print_mframe_info:
-            txt  = 'mframe:\n' % (mf.name%1000)
-            txt += 'photons:\n' % mf.n_phot
+            txt  = 'mframe:\n'
+            txt += 'photons:\n'
             txt += 'peak:\n'
             txt += 'flat:\n'
             txt += 'SNR surf all:\n'
@@ -2282,7 +2282,7 @@ class melt_lake:
             phdat.create_dataset('is_afterpulse', data=self.photon_data.is_afterpulse, compression=comp)
 
             mfdat = f.create_group('mframe_data')
-            mfdat.create_dataset('mframe', data=self.mframe_data.index, compression=comp)
+            mfdat.create_dataset('mframe', data=np.array(self.mframe_data.index).astype(np.int64), compression=comp)
             mfdat.create_dataset('lon', data=self.mframe_data.lon, compression=comp)
             mfdat.create_dataset('lat', data=self.mframe_data.lat, compression=comp)
             mfdat.create_dataset('xatc', data=self.mframe_data.xatc, compression=comp)
