@@ -75,7 +75,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
     
     # make dictionaries for beam data to be stored in
     dfs = {}
-    dfs_bckgrd = {}
+    dfs_tlm = {}
     all_beams = ['gt1l', 'gt1r', 'gt2l', 'gt2r', 'gt3l', 'gt3r']
     beams_available = [beam for beam in all_beams if "/%s/heights/" % beam in f]
     
@@ -154,15 +154,23 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
                                'mframe': np.array(f[beam]['heights']['pce_mframe_cnt']),
                                'ph_id_pulse': np.array(f[beam]['heights']['ph_id_pulse']),
                                'qual': np.array(f[beam]['heights']['quality_ph'])}) 
-            
                                # 0=nominal,1=afterpulse,2=impulse_response_effect,3=tep
 #            if 'weight_ph' in f[beam]['heights'].keys():
 #                 df['weight_ph'] = np.array(f[beam]['heights']['weight_ph'])
 # 
-#             df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
-#                                       'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
-#                                       'bckgrd_int_height': np.array(f[beam]['bckgrd_atlas']['bckgrd_int_height']),
-#                                       'delta_time': np.array(f[beam]['bckgrd_atlas']['delta_time'])})
+            # df_bckgrd = pd.DataFrame({'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
+            #                           'bckgrd_counts': np.array(f[beam]['bckgrd_atlas']['bckgrd_counts']),
+            #                           'bckgrd_int_height': np.array(f[beam]['bckgrd_atlas']['bckgrd_int_height']),
+            #                           'delta_time': np.array(f[beam]['bckgrd_atlas']['delta_time'])})
+            
+            df_tlm = pd.DataFrame({
+                'pce_mframe_cnt': np.array(f[beam]['bckgrd_atlas']['pce_mframe_cnt']),
+                'tlm_height_band1': np.array(f[beam]['bckgrd_atlas']['tlm_height_band1']),
+                'tlm_height_band2': np.array(f[beam]['bckgrd_atlas']['tlm_height_band2']),
+                'tlm_top_band1': np.array(f[beam]['bckgrd_atlas']['tlm_top_band1']),
+                'tlm_top_band2': np.array(f[beam]['bckgrd_atlas']['tlm_top_band2']),
+            })
+            df_tlm = df_tlm.groupby(by='pce_mframe_cnt').max()
 
             #### calculate along-track distances [meters from the equator crossing] from segment-level data
             df['xatc'] = np.full_like(df.lat, fill_value=np.nan)
@@ -200,7 +208,8 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
 
             #### save to list of dataframes
             dfs[beam] = df
-            del df 
+            dfs_tlm[beam] = df_tlm 
+            del df, dfs_tlm
             gc.collect()
         
         except:
@@ -212,13 +221,14 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
     if len(beamlist)==0:
         return beams_available, ancillary
     else:
-        return beams_available, ancillary, dfs
+        return beams_available, ancillary, dfs, df_tlm
 
 ##########################################################################################
 # # @profile
-def make_mframe_df(df):
+def make_mframe_df(df, tlm_data):
     mframe_group = df.groupby('mframe')
     df_mframe = mframe_group[['lat','lon', 'xatc', 'dt']].mean()
+    df_mframe = df_mframe.join(tlm_data, how='left')
     df_mframe.drop(df_mframe.head(1).index,inplace=True)
     df_mframe.drop(df_mframe.tail(1).index,inplace=True)
     df_mframe['time'] = df_mframe['dt'].map(convert_time_to_string)
@@ -252,7 +262,7 @@ def make_mframe_df(df):
 
 ##########################################################################################
 # @profile
-def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fine=0.01, smoothing_histogram=0.1, buffer=2.0,
+def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.1, bin_height_fine=0.01, smoothing_histogram=0.1, buffer=2.0,
                             width_surf=0.1, width_buff=0.35, rel_dens_upper_thresh=5, rel_dens_lower_thresh=2,
                             min_phot=30, min_snr_surface=10, min_snr_vs_all_above=100):
     
@@ -288,6 +298,8 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
     upper_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
     lower_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
     all_above_snr = np.full_like(peak_locs, 0.0, dtype=np.float32)
+    telems_min = np.full(len(df_mframe), np.nan, dtype=np.float32)
+    telems_max = np.full(len(df_mframe), np.nan, dtype=np.float32)
     
     for i, mframe in enumerate(df_mframe.index):
         
@@ -296,6 +308,13 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
             # select the photons in the major frame
             selector_segment = (df.mframe == mframe)
             dfseg = df[selector_segment]
+
+            # pull out the telemetry bands for the major frame
+            mframe_info = df_mframe.loc[mframe]
+            hmax1 = mframe_info.tlm_top_band1
+            hmax2 = mframe_info.tlm_top_band2
+            hmin1 = hmax1 - mframe_info.tlm_height_band1
+            hmin2 = hmax2 - mframe_info.tlm_height_band2
 
             # check if there are enough photons in the segment
             if len(dfseg) < min_phot:
@@ -311,9 +330,10 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
                 #             peak_loc1 = hist_mid1[np.argmax(np.histogram(dfseg.h, bins=bins_coarse1)[0])]
                 ##############################################################################################
                 promininece_threshold = 0.1
-                bins_coarse1 = np.arange(start=dfseg.h.min(), stop=dfseg.h.max(), step=bin_height_coarse)
+                bins_coarse1 = np.arange(start=dfseg.h.min()-3, stop=dfseg.h.max()+3, step=bin_height_coarse)
                 hist_mid1 = bins_coarse1[:-1] + 0.5 * bin_height_coarse
-                broad_hist = np.array(pd.Series(np.histogram(dfseg.h, bins=bins_coarse1)[0]).rolling(3,center=True,min_periods=1).mean())
+                # broad_hist = np.array(pd.Series(np.histogram(dfseg.h, bins=bins_coarse1)[0]).rolling(3,center=True,min_periods=1).mean())
+                broad_hist = np.array(pd.Series(np.histogram(dfseg.h, bins=bins_coarse1)[0]).rolling(window=10, center=True, min_periods=1, win_type='gaussian').mean(std=1))
                 broad_hist /= np.max(broad_hist)
                 peaks, peak_props = find_peaks(broad_hist, height=promininece_threshold, distance=1.0, prominence=promininece_threshold)
                 peak_hs = hist_mid1[peaks]
@@ -333,9 +353,34 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
                 hist = np.histogram(dfseg.h, bins=bins_coarse2)
                 window_size = int(smoothing_histogram/bin_height_fine)
                 hist_vals = hist[0] / np.max(hist[0])
-                hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window_size,center=True,min_periods=1).mean())
+                # hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window_size,center=True,min_periods=1).mean())
+                hist_vals_smoothed = np.array(pd.Series(hist_vals).rolling(window=window_size*3, center=True, min_periods=1, win_type='gaussian').mean(std=window_size/2))
+                hist_vals_smoothed /= np.max(hist_vals_smoothed)
+                peaks, peak_props = find_peaks(hist_vals_smoothed, height=0.5, distance=1.0, prominence=0.2)
+                peak_hs = hist_mid2[peaks]
+                if len(peaks) > 1:
+                    peak_proms = peak_props['prominences']
+                    idx_2highest = np.flip(np.argsort(peak_proms))[:2]
+                    pks_h = np.sort(peak_hs[idx_2highest])
+                    peak_loc2 = np.max(pks_h)
+                else:
+                    peak_loc2 = hist_mid2[np.argmax(hist_vals_smoothed)]
                 peak_loc2 = hist_mid2[np.argmax(hist_vals_smoothed)]
                 peak_locs[i] = peak_loc2
+
+                #figure out the right telemetry window bounds
+                if (peak_loc2<hmax1) & (peak_loc2>hmin1):
+                    telem_min, telem_max = hmin1, hmax1
+                elif (peak_loc2<hmax2) & (peak_loc2>hmin2):
+                    telem_min, telem_max = hmin2, hmax2
+                else:
+                    telem_min, telem_max = dfseg.h.min(), dfseg.h.max()
+
+                # add buffer to telemetry window, because sometimes they have odd values
+                telem_min = np.min((telem_min, peak_loc2-30))
+                telem_max = np.max((telem_max, peak_loc2+10))
+                telems_min[i] = telem_min
+                telems_max[i] = telem_max
 
                 # calculate relative photon densities
                 peak_upper = peak_loc2 + width_surf
@@ -346,12 +391,12 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
                 sum_above = np.sum((dfseg.h > peak_upper) & (dfseg.h < above_upper))
                 sum_below = np.sum((dfseg.h > below_lower) & (dfseg.h < peak_lower))
                 sum_all_above = np.sum(dfseg.h > peak_upper)
-                h_range_all_above = dfseg.h.max() - peak_upper
+                h_range_all_above = telem_max - peak_upper
                 noise_rate_all_above = sum_all_above / h_range_all_above
                 signal_rate = sum_peak / (width_surf*2)
                 rel_dens_upper = 1000 if sum_above==0 else signal_rate / (sum_above / width_buff)
                 rel_dens_lower = 1000 if sum_below==0 else signal_rate / (sum_below / width_buff)
-                noise_rate = (dfseg.h.count() - sum_peak) / (dfseg.h.max() - dfseg.h.min() - width_surf*2)
+                noise_rate = (dfseg.h.count() - sum_peak) / (telem_max - telem_min - width_surf*2)
                 snr_surface = signal_rate / noise_rate
                 snr_allabove = 1000 if noise_rate_all_above == 0 else signal_rate / noise_rate_all_above
 
@@ -379,6 +424,8 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.2, bin_height_fin
     df_mframe['snr_upper'] = upper_snr
     df_mframe['snr_lower'] = lower_snr
     df_mframe['snr_allabove'] = all_above_snr
+    df_mframe['telem_min'] = telems_min
+    df_mframe['telem_max'] = telems_max
     
     print('(%i / %i were flat)' % (df_mframe.is_flat.sum(), df_mframe.is_flat.count()))
 
@@ -412,8 +459,8 @@ def get_saturation_and_elevation(hvals, num_channels, dead_time):
 
 ##########################################################################################
 # @profile
-def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=10, dh_signal=0.3, n_subsegs=10,
-                                bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
+def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspect=30, K_phot=20, dh_signal=0.3, n_subsegs=10,
+    bin_height_snr=0.1, smoothing_length=1.0, buffer=4.0, print_results=False):
     
     print('---> removing afterpulses, calculating photon densities & looking for second density peaks below the surface')
     
@@ -426,12 +473,33 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
     # remove afterpulses
     beam_strength = ancillary['gtx_strength_dict'][gtx]
     deadtime = ancillary['gtx_dead_time_dict'][gtx]
+    beam_nr = ancillary['gtx_beam_dict'][gtx]
     n_channels = 4 if beam_strength == 'weak' else 16
-    peak_target_elevs = [-0.56, -0.93, -1.47, -1.85, -2.44, -4.25]
-    widths_pk = [0.3, 0.225, 0.225, 0.225, 0.35, 0.3]
-    diff_pk_tols = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2]
-    rem_thresh_strong = [0.6, 2.7, 5.0, 30.0, 1.0, 1.0]
-    rem_thresh_weak = [0.6, 4.0, 5.0, 15.0, 1.0, 1.0]
+    
+    peak_elevs_dict = {
+        'all':    [ -0.55,  -0.92, np.nan,  -1.50,  -1.85,  -2.47,  -4.26],
+        'strong': [ -0.55,  -0.92, np.nan,  -1.48, np.nan,  -2.44,  -4.23],
+        'weak':   [ -0.53, -0.946, np.nan,  -1.50,  -1.85,  -2.49,  -4.42],
+        '1':      [ -0.54,  -0.88, np.nan,  -1.40, np.nan,  -2.37,  -4.19],
+        '2':      [ -0.51,  -0.88, np.nan,  -1.43, np.nan,  -2.31,  -4.24],
+        '3':      [ -0.56,  -0.92,  -1.22,  -1.50, -1.795,  -2.47,  -4.24],
+        '4':      [-0.575, -0.946, np.nan,  -1.50,  -1.85,  -2.50,  -4.45],
+        '5':      [ -0.54,  -0.89, np.nan, np.nan, np.nan,  -2.35,  -4.21],
+        '6':      [ -0.55,  -0.95, np.nan, -1.484,  -1.82,  -2.38,  -4.25],
+    }
+    widths_pk =   np.array([  0.35,   0.15,    0.1,   0.11,    0.1,   0.35,   0.35])
+    diff_pk_tols = np.array([  0.1,    0.1,    0.1,    0.1,    0.1,    0.2,    0.2])
+    rem_thresh_strong = np.array([0.6, 2.7, 5.0, 5.0, 20.0, 2.0, 2.0])
+    rem_thresh_weak = np.array([0.6, 4.0, 5.0, 5.0, 12.0, 2.0, 2.0])
+    peak_target_elevs = np.array(peak_elevs_dict[str(beam_nr)])
+    targets_selector = ~np.isnan(peak_target_elevs)
+    widths_pk = widths_pk[targets_selector]
+    diff_pk_tols = diff_pk_tols[targets_selector]
+    rem_thresh_strong = rem_thresh_strong[targets_selector]
+    rem_thresh_weak = rem_thresh_weak[targets_selector]
+    peak_target_elevs = peak_target_elevs[targets_selector]
+    max_peaks_rem = np.sum(targets_selector)
+
     range_full_removal = 0.05
     saturation_threshold = 1.0
 
@@ -462,9 +530,9 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     smooth_h_top = 0.08
                     smooth_h_middle = 0.15
                     smooth_h_bottom = 0.3
-                    switch1 = -1.2
-                    switch2 = -2.1
-                    bins = np.arange(-5, 0.5+bin_h, bin_h)
+                    switch1 = -1.1
+                    switch2 = -2.0
+                    bins = np.arange(-7.5, 0.5+bin_h, bin_h)
                     mids = bins[:-1] + 0.5*bin_h
                     smooth_top = int(np.round(smooth_h_top/bin_h))
                     smooth_middle = int(np.round(smooth_h_middle/bin_h))
@@ -472,9 +540,13 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     # histweights = df_join.ratio_saturation_smooth*df_join.snr
                     histweights = df_join.ratio_saturation_smooth
                     hist_h = np.histogram(df_join.h_rel_to_sat, bins=bins, weights=histweights)
-                    hist_h_smooth_top = np.array(pd.Series(hist_h[0]).rolling(smooth_top,center=True,min_periods=1).mean())
-                    hist_h_smooth_middle = np.array(pd.Series(hist_h[0]).rolling(smooth_middle,center=True,min_periods=1).mean())
-                    hist_h_smooth_bottom = np.array(pd.Series(hist_h[0]).rolling(smooth_bottom,center=True,min_periods=1).mean())
+                    hcnts = pd.Series(hist_h[0])
+                    # hist_h_smooth_top = hcnts.rolling(smooth_top,center=True,min_periods=1).mean())
+                    # hist_h_smooth_middle = hcnts.rolling(smooth_middle,center=True,min_periods=1).mean())
+                    # hist_h_smooth_bottom = hcnts.rolling(smooth_bottom,center=True,min_periods=1).mean())
+                    hist_h_smooth_top = np.array(hcnts.rolling(smooth_top*3,center=True,min_periods=1,win_type='gaussian').mean(std=smooth_top/2))
+                    hist_h_smooth_middle = np.array(hcnts.rolling(smooth_middle*3,center=True,min_periods=1,win_type='gaussian').mean(std=smooth_middle/2))
+                    hist_h_smooth_bottom = np.array(hcnts.rolling(smooth_bottom*3,center=True,min_periods=1,win_type='gaussian').mean(std=smooth_bottom/2))
                     seg1 = hist_h_smooth_bottom[mids<=switch2]
                     seg2 = hist_h_smooth_middle[(mids>switch2) & (mids<=switch1)]
                     seg3 = hist_h_smooth_top[mids>switch1]
@@ -491,8 +563,8 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     df_sat = pd.DataFrame(props)
                     df_sat.reset_index(drop=True, inplace=True)
                     df_sat.sort_values(by='prominences', ascending=False, ignore_index=True, inplace=True)
-                    if len(df_sat) > 7:
-                        df_sat = df_sat.iloc[:7]
+                    if len(df_sat) > max_peaks_rem:
+                        df_sat = df_sat.iloc[:max_peaks_rem]
                     df_sat.sort_values(by='elev', ascending=False, ignore_index=True, inplace=True)
             
                     for i, pk in enumerate(peak_target_elevs):
@@ -527,6 +599,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
     for mframe in df_mframe_selected.index:
         if np.sum(df.mframe == mframe) > 50:
             try:
+                mframe_info = df_mframe_selected.loc[mframe]
                 selector_segment = ((df.mframe == mframe) & ~df.is_afterpulse)
                 dfseg = df[selector_segment].copy()
 
@@ -543,12 +616,15 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                 nphot_bckgrd = len(dfseg_nosurface.h)
 
                 # radius of a circle in which we expect to find one non-lake-surface signal photon
-                telem_h = dfseg_nosurface.h.max()-dfseg_nosurface.h.min()
+                # telem_h = dfseg_nosurface.h.max()-dfseg_nosurface.h.min()
+                frac_noise=0.05
+                telem_h = mframe_info.telem_max - mframe_info.telem_min
                 flat_surf_signal_h = 2*dh_signal
                 h_noise = telem_h-flat_surf_signal_h
                 wid_noise = (xmax-xmin)/aspect
                 area = h_noise*wid_noise/nphot_bckgrd
-                wid = np.sqrt(area/np.pi)
+                fac = 3
+                wid = np.sqrt(fac*frac_noise*(K_phot+1)*area/np.pi)
 
                 # buffer segment for density calculation
                 selector_buffer = (df.xatc >= (dfseg.xatc.min()-aspect*wid)) & (df.xatc <= (dfseg.xatc.max()+aspect*wid)) & (~df.is_afterpulse)
@@ -582,6 +658,14 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                 # subdivide into segments again to check for second return
                 subsegs = np.linspace(xmin, xmax, n_subsegs+1) 
                 subsegwidth = subsegs[1] - subsegs[0]
+                # bin_height_snr = 0.1
+                # buffer=4.0
+                # dh_signal=0.3
+                bin_height_counts = 0.01
+                smoothing_length = 0.5
+                smoothing_length_counts = 1.0
+                window_size_sub = int(smoothing_length/bin_height_snr)
+                window_size_sub_counts = int(smoothing_length_counts/bin_height_counts)
 
                 n_2nd_returns = 0
                 prominences = []
@@ -602,63 +686,132 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     maxdepth_2nd_return = 50.0 if avg_saturation < 3.5 else 13.0
 
                     # avoid looking for peaks when there's no / very little data
-                    if len(dfsubseg > 5):
-
-                        # get the median of the snr values in each bin
-                        bins_subseg_snr = np.arange(start=np.max((dfsubseg.h.min(),peak_loc2-maxdepth_2nd_return)), stop=peak_loc2+2*buffer, step=bin_height_snr)
+                    if len(dfsubseg > 10):
+                        
+                         # get the median of the snr values in each bin
+                        bins_subseg_snr = np.arange(start=np.max((dfsubseg.h.min()-3.0,peak_loc2-maxdepth_2nd_return)), 
+                                                    stop=peak_loc2+2*buffer, step=bin_height_snr)
                         mid_subseg_snr = bins_subseg_snr[:-1] + 0.5 * bin_height_snr
+                        bins_subseg_counts = np.arange(start=np.max((dfsubseg.h.min()-3.0,peak_loc2-maxdepth_2nd_return)), 
+                                                       stop=peak_loc2+2*buffer, step=bin_height_counts)
+                        mid_subseg_counts = bins_subseg_counts[:-1] + 0.5 * bin_height_counts
                         try:
                             snrstats = binned_statistic(dfsubseg.h, dfsubseg.snr, statistic='median', bins=bins_subseg_snr)
                         except ValueError:  #raised if empty
                             pass
                         snr_median = snrstats[0]
                         snr_median[np.isnan(snr_median)] = 0
-                        window_size_sub = int(smoothing_length/bin_height_snr)
-                        snr_vals_smoothed = np.array(pd.Series(snr_median).rolling(window_size_sub,center=True,min_periods=1).mean())
+                        snr_vals_smoothed = np.array(pd.Series(snr_median).rolling(window=window_size_sub*3,
+                                                    center=True, min_periods=1, win_type='gaussian').mean(std=window_size_sub/2))
                         if len(snr_vals_smoothed) < 1:
                             break
                         if np.max(snr_vals_smoothed) == 0:
                             break
-                            
+                        
                         snr_vals_smoothed /= np.nanmax(snr_vals_smoothed)
 
+                        # # get the median of the snr values in each bin
+                        # bins_subseg_snr = np.arange(start=np.max((dfsubseg.h.min(),peak_loc2-maxdepth_2nd_return)), stop=peak_loc2+2*buffer, step=bin_height_snr)
+                        # mid_subseg_snr = bins_subseg_snr[:-1] + 0.5 * bin_height_snr
+                        # try:
+                        #     snrstats = binned_statistic(dfsubseg.h, dfsubseg.snr, statistic='median', bins=bins_subseg_snr)
+                        # except ValueError:  #raised if empty
+                        #     pass
+                        # snr_median = snrstats[0]
+                        # snr_median[np.isnan(snr_median)] = 0
+                        # window_size_sub = int(smoothing_length/bin_height_snr)
+                        # snr_vals_smoothed = np.array(pd.Series(snr_median).rolling(window_size_sub,center=True,min_periods=1).mean())
+                        # if len(snr_vals_smoothed) < 1:
+                        #     break
+                        # if np.max(snr_vals_smoothed) == 0:
+                        #     break
+                            
+                        # snr_vals_smoothed /= np.nanmax(snr_vals_smoothed)
+
                         # take histogram binning values into account, but clip surface peak to second highest peak height
-                        subhist, subhist_edges = np.histogram(dfsubseg.h, bins=bins_subseg_snr)
+                        subhist, subhist_edges = np.histogram(dfsubseg.h, bins=bins_subseg_counts)
+                        subhist_smoothed = np.array(pd.Series(subhist).rolling(window=window_size_sub_counts*3, 
+                                            center=True, min_periods=1, win_type='gaussian').mean(std=window_size_sub_counts/2))
                         subhist_nosurface = subhist.copy()
-                        subhist_nosurface[(mid_subseg_snr < (peak_loc2+dh_signal)) & (mid_subseg_snr > (peak_loc2-dh_signal))] = 0
-                        subhist_nosurface_smoothed = np.array(pd.Series(subhist_nosurface).rolling(window_size_sub,center=True,min_periods=1).mean())
+                        subhist_nosurface[(mid_subseg_counts < (peak_loc2+dh_signal)) & (mid_subseg_counts > (peak_loc2-dh_signal))] = 0
+                        subhist_nosurface_smoothed = np.array(pd.Series(subhist_nosurface).rolling(window=window_size_sub_counts*3, 
+                                                     center=True, min_periods=1, win_type='gaussian').mean(std=window_size_sub_counts/2))
                         if len(subhist_nosurface_smoothed) < 1:
                             break
                         if np.max(subhist_nosurface_smoothed) == 0:
                             break
                         subhist_max = subhist_nosurface_smoothed.max()
-                        subhist_smoothed = np.array(pd.Series(subhist).rolling(window_size_sub,center=True,min_periods=1).mean())
                         subhist_smoothed = np.clip(subhist_smoothed, 0, subhist_max)
                         if np.max(subhist_smoothed) == 0:
                             break
                         subhist_smoothed /= np.max(subhist_smoothed)
-
+            
                         # combine histogram and snr values to find peaks
+                        snr_vals_smoothed = np.interp(mid_subseg_counts, mid_subseg_snr, snr_vals_smoothed)
+                        
                         snr_hist_smoothed = subhist_smoothed * snr_vals_smoothed
                         peaks, peak_props = find_peaks(snr_hist_smoothed, height=0.05, distance=int(0.5/bin_height_snr), prominence=0.05)
 
-                        if len(peaks) >= 2: 
-                            has_surf_peak = np.min(np.abs(peak_loc2 - mid_subseg_snr[peaks])) < 0.4
-                            if has_surf_peak: 
-                                idx_surfpeak = np.argmin(np.abs(peak_loc2 - mid_subseg_snr[peaks]))
-                                peak_props['prominences'][idx_surfpeak] = 0
+                        # # take histogram binning values into account, but clip surface peak to second highest peak height
+                        # subhist, subhist_edges = np.histogram(dfsubseg.h, bins=bins_subseg_snr)
+                        # subhist_nosurface = subhist.copy()
+                        # subhist_nosurface[(mid_subseg_snr < (peak_loc2+dh_signal)) & (mid_subseg_snr > (peak_loc2-dh_signal))] = 0
+                        # subhist_nosurface_smoothed = np.array(pd.Series(subhist_nosurface).rolling(window_size_sub,center=True,min_periods=1).mean())
+                        # if len(subhist_nosurface_smoothed) < 1:
+                        #     break
+                        # if np.max(subhist_nosurface_smoothed) == 0:
+                        #     break
+                        # subhist_max = subhist_nosurface_smoothed.max()
+                        # subhist_smoothed = np.array(pd.Series(subhist).rolling(window_size_sub,center=True,min_periods=1).mean())
+                        # subhist_smoothed = np.clip(subhist_smoothed, 0, subhist_max)
+                        # if np.max(subhist_smoothed) == 0:
+                        #     break
+                        # subhist_smoothed /= np.max(subhist_smoothed)
 
+                        # combine histogram and snr values to find peaks
+                        # snr_hist_smoothed = subhist_smoothed * snr_vals_smoothed
+                        # peaks, peak_props = find_peaks(snr_hist_smoothed, height=0.05, distance=int(0.5/bin_height_snr), prominence=0.05)
+
+                        # if len(peaks) >= 2: 
+                        #     has_surf_peak = np.min(np.abs(peak_loc2 - mid_subseg_snr[peaks])) < 0.4
+                        #     if has_surf_peak: 
+                        #         idx_surfpeak = np.argmin(np.abs(peak_loc2 - mid_subseg_snr[peaks]))
+                        #         peak_props['prominences'][idx_surfpeak] = 0
+
+                        #         # classify as second peak only if prominence is larger than $(prominence_threshold)
+                        #         prominence_secondpeak = np.max(peak_props['prominences'])
+                        #         prominence_threshold = 0.1
+                        #         if prominence_secondpeak > prominence_threshold:
+
+                        #             idx_2ndreturn = np.argmax(peak_props['prominences'])
+                        #             secondpeak_h = mid_subseg_snr[peaks[idx_2ndreturn]]
+
+                        #             # classify as second peak only if elevation is 0.6m lower than main peak (surface) 
+                        #             # and higher than 50m below surface
+                        #             if (secondpeak_h < (peak_loc2-0.6)) & (secondpeak_h > (peak_loc2-50.0)):
+                        #                 secondpeak_xtac = subsegstart + subsegwidth/2
+                        #                 n_2nd_returns += 1
+                        #                 prominences.append(prominence_secondpeak)
+                        #                 elev_2ndpeaks.append(secondpeak_h)
+                        #                 subpeaks_xatc.append(secondpeak_xtac)
+                        
+                        if len(peaks) >= 2: 
+                            has_surf_peak = np.min(np.abs(peak_loc2 - mid_subseg_counts[peaks])) < 0.4
+                            if has_surf_peak: 
+                                idx_surfpeak = np.argmin(np.abs(peak_loc2 - mid_subseg_counts[peaks]))
+                                peak_props['prominences'][idx_surfpeak] = 0
+            
                                 # classify as second peak only if prominence is larger than $(prominence_threshold)
                                 prominence_secondpeak = np.max(peak_props['prominences'])
                                 prominence_threshold = 0.1
                                 if prominence_secondpeak > prominence_threshold:
-
+            
                                     idx_2ndreturn = np.argmax(peak_props['prominences'])
-                                    secondpeak_h = mid_subseg_snr[peaks[idx_2ndreturn]]
-
+                                    secondpeak_h = mid_subseg_counts[peaks[idx_2ndreturn]]
+            
                                     # classify as second peak only if elevation is 0.6m lower than main peak (surface) 
                                     # and higher than 50m below surface
-                                    if (secondpeak_h < (peak_loc2-0.6)) & (secondpeak_h > (peak_loc2-50.0)):
+                                    if (secondpeak_h < (peak_loc2-0.5)) & (secondpeak_h > (peak_loc2-50.0)):
                                         secondpeak_xtac = subsegstart + subsegwidth/2
                                         n_2nd_returns += 1
                                         prominences.append(prominence_secondpeak)
@@ -667,7 +820,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
 
                 # keep only second returns that are 3 m or closer to the next one on either side 
                 # (helps filter out random noise, but might in rare cases suppress a signal)
-                maxdiff = 3.0
+                maxdiff = 5.0
                 if len(elev_2ndpeaks) > 0:
                     if len(elev_2ndpeaks) > 2: # if there's at least 3 second returns, compare elevations and remove two-sided outliers
                         diffs = np.abs(np.diff(np.array(elev_2ndpeaks)))
@@ -677,7 +830,8 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
 
                     # just consider elevation difference if there's only two, remove if only one (shouldn't be the case...)
                     elif len(elev_2ndpeaks) == 2:
-                        to_keep = [True, True] if np.abs(elev_2ndpeaks[1] - elev_2ndpeaks[0]) < maxdiff else [False, False]
+                        # to_keep = [True, True] if np.abs(elev_2ndpeaks[1] - elev_2ndpeaks[0]) < maxdiff else [False, False]
+                        to_keep = [False, False]
                     elif len(elev_2ndpeaks) == 1:
                         to_keep = [False]
 
@@ -704,9 +858,11 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                     dirchange = np.abs(np.diff(np.sign(diffs))) > 1
                     total_distance = 0.0
                     for i,changed in enumerate(dirchange):
-                        if changed: total_distance += (np.abs(diffs)[i] + np.abs(diffs)[i+1])/2
-                    alignment_penalty = 1.0 if total_distance==0 else\
-                                        np.clip(np.clip(h_range, 0.5, None) / (total_distance + np.clip(h_range, 0.5, None)), 0, 1)
+                        # if changed: total_distance += (np.abs(diffs)[i] + np.abs(diffs)[i+1])/2
+                        if changed: total_distance += np.min((np.abs(diffs)[i], np.abs(diffs)[i+1]))
+                    # alignment_penalty = 1.0 if total_distance==0 else\
+                    #                     np.clip(np.clip(h_range, 0.5, None) / (total_distance + np.clip(h_range, 0.5, None)), 0, 1)
+                    alignment_penalty = np.clip(np.clip(h_range, 0.5*n_subsegs, None) / (total_distance + np.clip(h_range, 0.5*n_subsegs, None)), 0, 1)
                     range_penalty = np.clip(1/math.log(np.clip(h_range,1.1,None),5), 0, 1)
                     length_penalty = (len(elev_2ndpeaks) / n_subsegs)**1.5
                     quality_secondreturns = np.clip(np.mean(prominences) * ((np.clip(2*len(elev_2ndpeaks)/n_subsegs, 1, None)-1)*2+1), 0, 1)
@@ -1094,7 +1250,7 @@ def get_gtx_stats(df_ph, lake_list):
 ##########################################################################################
 # @profile
 def get_clipped_granule(input_filename, gtx, polygon):
-    gtx_list, ancillary, photon_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
+    gtx_list, ancillary, photon_data, tlm_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
     if len(photon_data)==0: return [], [0,0,0,0]
     
     print('\n-----------------------------------------------------------------------------\n')
@@ -1117,15 +1273,15 @@ def get_clipped_granule(input_filename, gtx, polygon):
     photon_data = None
     del photon_data, clip_shape
     gc.collect()
-    return df, ancillary
+    return df, ancillary, tlm_data
     
 
 ##########################################################################################
 # @profile
 def detect_lakes(input_filename, gtx, polygon, verbose=False):
 
-    df, ancillary = get_clipped_granule(input_filename, gtx, polygon)
-    df_mframe = make_mframe_df(df)
+    df, ancillary, tlm_data = get_clipped_granule(input_filename, gtx, polygon)
+    df_mframe = make_mframe_df(df, tlm_data)
     
     # get all the flat segments and select
     df_mframe = find_flat_lake_surfaces(df_mframe, df)
@@ -1258,14 +1414,14 @@ class melt_lake:
 
         
     #-------------------------------------------------------------------------------------
-    def get_surface_elevation(self, search_width=1.0, bin_h=0.005, smoothing=0.1):
+    def get_surface_elevation(self, search_width=1.0, bin_h=0.001, smoothing=0.1):
         selector = (self.photon_data.h < (self.main_peak+search_width)) & (self.photon_data.h > (self.main_peak-search_width))
         heights = self.photon_data.h[selector]
         bins = np.arange(start=self.main_peak-search_width, stop=self.main_peak+search_width, step=bin_h)
         mid = bins[:-1] + 0.5 * bin_h
         hist = np.histogram(heights, bins=bins)
         window_size = int(smoothing/bin_h)
-        hist_vals_smoothed = np.array(pd.Series(hist[0]).rolling(window_size,center=True,min_periods=1).mean())
+        hist_vals_smoothed = np.array(pd.Series(hist[0]).rolling(window_size*3,win_type='gaussian',center=True,min_periods=1).mean(std=window_size/3))
         self.surface_elevation = mid[np.argmax(hist_vals_smoothed)]
 
         
@@ -1285,11 +1441,18 @@ class melt_lake:
         hist_totl = np.histogram(df_totl.xatc, bins=bins)
         max_all = binned_statistic(self.photon_data.xatc, self.photon_data.h, statistic='max', bins=bins)
         min_all = binned_statistic(self.photon_data.xatc, self.photon_data.h, statistic='min', bins=bins)
-        surf_smooth = np.array(pd.Series(hist_surf[0]).rolling(smooth,center=True,min_periods=1).mean())
-        abov_smooth = np.array(pd.Series(hist_abov[0]).rolling(smooth,center=True,min_periods=1).mean())
-        totl_smooth = np.array(pd.Series(hist_totl[0]).rolling(smooth,center=True,min_periods=1).mean())
-        maxs_smooth = np.array(pd.Series(max_all[0]).rolling(smooth,center=True,min_periods=1).max())
-        mins_smooth = np.array(pd.Series(min_all[0]).rolling(smooth,center=True,min_periods=1).min())
+        
+        # instead of using the actual telemetry window heights here, just expand range by at least 10 m elevation
+        max_all = np.clip(max_all[0], self.surface_elevation+surf_width/2+10, None)
+        min_all = np.clip(min_all[0], None, self.surface_elevation-surf_width/2-30, None)
+        surf_smooth = np.array(pd.Series(hist_surf[0]).rolling(smooth*3,win_type='gaussian',center=True,
+                                                               min_periods=1).mean(std=smooth/2))
+        abov_smooth = np.array(pd.Series(hist_abov[0]).rolling(smooth*3,win_type='gaussian',center=True,
+                                                               min_periods=1).mean(std=smooth/2))
+        totl_smooth = np.array(pd.Series(hist_totl[0]).rolling(smooth*3,win_type='gaussian',center=True,
+                                                               min_periods=1).mean(std=smooth/2))
+        maxs_smooth = np.array(pd.Series(max_all).rolling(smooth*3,center=True,min_periods=1).max())
+        mins_smooth = np.array(pd.Series(min_all).rolling(smooth*3,center=True,min_periods=1).min())
         dens_surf = surf_smooth / (surf_width*bin_width)
         dens_abov = abov_smooth / (abov_width*bin_width)
         dens_totl = totl_smooth / ((maxs_smooth-mins_smooth-surf_width)*bin_width)
@@ -1300,7 +1463,7 @@ class melt_lake:
         dens_ratio_totl[dens_ratio_totl>1] = 1
         dens_eval = np.max(np.vstack((dens_ratio_abov,dens_ratio_totl)), axis=0)
         surf_possible = dens_eval < max_ratio
-        surf_possible[(mids<250) | (mids>(np.max(mids)-250))] = False # because we added two extra major frames on each side
+        surf_possible[(mids<200) | (mids>(np.max(mids)-200))] = False # because we added two extra major frames on each side
 
         # get surface segments that are continuous for longer than x meters
         current_list = []
@@ -1726,7 +1889,7 @@ class melt_lake:
         surffit_selector = (((df.h > (h_surf-0.4)) | (~df.in_extent)) & (df.snr > 0.5)) | ((df.h > (h_surf-0.3)) & (df.h < (h_surf+0.3)))
         df_fit = df[surffit_selector].copy()
         evaldf_surf, df_fit_surf = robust_npreg(df_fit, ext, n_iter=10, poly_degree=1, len_xatc_min=20,
-                                                n_points=[300,100], resolutions=[20,final_resolution], stds=[10,4], ext_buffer=250.0)
+                                                n_points=[300,100], resolutions=[20,final_resolution], stds=[10,4], ext_buffer=210.0)
 
         # re-calculate water surface elevation based on fit
         hist_res = 0.001
@@ -1781,9 +1944,9 @@ class melt_lake:
         
         # fit lakebed surface 
         npts = [100,50] if self.beam_strength=='weak' else [200,100]
-        evaldf, df_fit_bed, xv, hv = robust_npreg(df_nosurf, ext, n_iter=20, poly_degree=3, len_xatc_min=100,
+        evaldf, df_fit_bed = robust_npreg(df_nosurf, ext, n_iter=20, poly_degree=3, len_xatc_min=100,
                                                   n_points=npts, resolutions=[20,final_resolution], stds=[10,3], 
-                                                  ext_buffer=200.0, full=True, init=init_guess)
+                                                  ext_buffer=200.0, full=False, init=init_guess)
 
         # add probability of being lake bed for each photon
         df['prob_bed'] = 0
@@ -1807,7 +1970,7 @@ class melt_lake:
         evaldf['upper'] = evaldf.h_fit+std_range*evaldf.stdev  # uppper threshold for bed photon density / lower threshold for lake interior 
         evaldf['hrange_bed'] = evaldf.upper - evaldf.lower  # the elevation range over which to calculate bed photon density
         evaldf['hrange_int'] = np.clip((surf_elev - evaldf.upper) * 0.5 , 0.5, None) # the elevation range over which to calculate interior photon density
-        evaldf['upper_int'] = evaldf.h_fit + evaldf.hrange_bed/2 + evaldf.hrange_int # uppper threshold for lake interior photon density
+        evaldf['upper_int'] = evaldf.h_fit + evaldf.hrange_bed/2 + evaldf.hrange_int # upper threshold for lake interior photon density
 
         # initialize photon counts per depth measurement point, and get photon data frame with afterpulses removed
         num_bed = np.zeros_like(evaldf.xatc)
@@ -1853,13 +2016,12 @@ class melt_lake:
         evaldf['conf'] = evaldf.density_ratio * evaldf.width_ratio
 
         # calculate the water depth
-        evaldf['depth'] = np.clip(surf_elev - evaldf.h_fit, 0, None) / 1.333
+        evaldf['depth'] = np.clip(surf_elev - evaldf.h_fit, 0, None) / 1.336
         evaldf.loc[(~evaldf.is_water) & (evaldf.depth > 0.0), 'conf'] = 0.0
         evaldf.loc[~evaldf.is_water, 'depth'] = 0.0
 
         # multiply probability of bed by condifence in measurement
         df.prob_bed *= np.interp(df.xatc, evaldf.xatc, evaldf.conf, left=0.0, right=0.0)
-
 
         # get the overall lake quality
         df_bed = evaldf[(evaldf.h_fit < surf_elev) & (evaldf.h_fit < evaldf.h_fit_surf)].copy()
@@ -1877,13 +2039,14 @@ class melt_lake:
             counts[i,:] = hist
         
         scaled_hist = np.sum(counts, axis=0)
-        scaled_smooth = pd.Series(scaled_hist).rolling(window=int(nbins/3), win_type='gaussian', min_periods=1, center=True).mean(std=nbins/100)
+        scaled_smooth = pd.Series(scaled_hist).rolling(window=int(nbins/10), win_type='gaussian', min_periods=1, center=True).mean(std=nbins/100)
         df_dens = pd.DataFrame({'x': np.linspace(-1,2,nbins), 'n': scaled_smooth})
         n_bedpeak = np.interp(0.0, df_dens.x, df_dens.n)
         df_dens_int = df_dens[(df_dens.x > 0) & (df_dens.x < 1)].copy()
-        n_saddle = np.min(df_dens_int.n)
-        n_saddle = np.mean(df_dens_int.n[df_dens_int.n < np.percentile(df_dens_int.n, 33)])
-        depth_quality = np.clip(n_bedpeak / n_saddle - 2.0, 0, None)
+        # n_saddle = np.min(df_dens_int.n)
+        n_saddle = np.mean(df_dens_int.n[df_dens_int.n < np.percentile(df_dens_int.n, 25)])
+        depth_quality = np.clip(n_bedpeak / n_saddle - 2, 0, None)
+        depth_quality_sort = np.clip(n_bedpeak / n_saddle, 0, None)
 
         evaldf['h_fit_bed'] = evaldf.h_fit
         evaldf['std_bed'] = evaldf.stdev
@@ -1902,6 +2065,7 @@ class melt_lake:
         self.depth_data = evaldf[['xatc', 'lat', 'lon', 'depth', 'conf', 'h_fit_surf', 'h_fit_bed', 'std_surf', 'std_bed']].copy()
         self.surface_elevation = surf_elev
         self.lake_quality = depth_quality
+        self.quality_sort = depth_quality_sort
         self.max_depth = evaldf.depth[evaldf.conf>0.0].max()
    
     #-------------------------------------------------------------------------------------
@@ -1942,7 +2106,7 @@ class melt_lake:
         # plot the water depth on second axis (but zero aligned with the lake surface elevation 
         ax2 = ax.twinx()
         p_water_depth = ax2.scatter(dfd.xatc, dfd.depth, s=3, c=[(1, 1-x, 1-x) for x in dfd.conf], label='water depth')
-        yl1 = np.array([surf_elev - 1.5*1.333*dfd.depth.max(), surf_elev + 1.333*dfd.depth.max()])
+        yl1 = np.array([surf_elev - 1.5*1.336*dfd.depth.max(), surf_elev + 1.336*dfd.depth.max()])
         ylms = yl1
         yl2 = yl1 - surf_elev
 
@@ -2139,6 +2303,8 @@ class melt_lake:
             mfdat.create_dataset('alignment_penalty', data=self.mframe_data.alignment_penalty, compression=comp)
             mfdat.create_dataset('range_penalty', data=self.mframe_data.range_penalty, compression=comp)
             mfdat.create_dataset('length_penalty', data=self.mframe_data.length_penalty, compression=comp)
+            mfdat.create_dataset('telem_min', data=self.mframe_data.telem_min, compression=comp)
+            mfdat.create_dataset('telem_max', data=self.mframe_data.telem_max, compression=comp)
 
             scnds = f.create_group('detection_2nd_returns')
             scnds.create_dataset('h', data=np.array(self.detection_2nd_returns['h']), compression=comp)
@@ -2152,6 +2318,7 @@ class melt_lake:
             props = f.create_group('properties')
             props.create_dataset('lake_id', data=self.lake_id)
             props.create_dataset('lake_quality', data=self.lake_quality)
+            props.create_dataset('quality_sort', data=self.quality_sort)
             props.create_dataset('max_depth', data=self.max_depth)
             props.create_dataset('mframe_start', data=self.mframe_start)
             props.create_dataset('mframe_end', data=self.mframe_end)

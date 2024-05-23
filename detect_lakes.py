@@ -152,8 +152,7 @@ for i, lake in enumerate(lake_list):
 for i, lake in enumerate(lake_list):
     try:
         lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
-        filename_base = 'lake_%05i-%05i_%s_%s_%s' % (np.clip(1000-lake.lake_quality,0,None)*10, 
-                                                     np.clip(1.0-lake.detection_quality,0,1)*1e4,
+        filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.quality_sort,0,None)*100)),
                                                      lake.ice_sheet, lake.melt_season, 
                                                      lake.lake_id)
         figname = args.out_plot_dir + '/%s.jpg' % filename_base
