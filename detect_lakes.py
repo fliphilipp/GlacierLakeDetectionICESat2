@@ -13,6 +13,9 @@
 # $ python3 detect_lakes.py --granule ATL03_20220714010847_03381603_006_02.h5 --polygon geojsons/simplified_GRE_2000_CW.geojson
 # one with more than 100 lakes
 # $ python3 detect_lakes.py --granule ATL03_20210729062325_05441205_006_01.h5 --polygon geojsons/simplified_GRE_2000_SW.geojson
+# for new 2023 greenland data duplicate drop test (clouds, mostly!!)
+# $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_SW.geojson
+# $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_CW.geojson
 
 import argparse
 import os
@@ -152,6 +155,8 @@ for i, lake in enumerate(lake_list):
 for i, lake in enumerate(lake_list):
     try:
         lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
+        if np.isnan(lake.quality_sort):
+            lake.quality_sort = 0.0
         filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.quality_sort,0,None)*100)),
                                                      lake.ice_sheet, lake.melt_season, 
                                                      lake.lake_id)

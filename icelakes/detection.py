@@ -67,7 +67,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
     >>> read_atl03(filename='processed_ATL03_20210715182907_03381203_005_01.h5', geoid_h=True)
     """
     
-    print('  reading in', filename)
+    print('reading in data file', filename)
     granule_id = filename[filename.find('ATL03_'):(filename.find('.h5')+3)]
     
     # open file
@@ -909,7 +909,7 @@ def get_densities_and_2nd_peaks(df, df_mframe, df_selected, gtx, ancillary, aspe
                 print('Something went wrong getting densities and peaks for mframe %i ...' % mframe)
                 traceback.print_exc()
                 
-    print('(%i / %i pass lake quality test)' % (df_mframe.lake_qual_pass.sum(), df_mframe.lake_qual_pass.count()))
+    print('     (%i / %i pass lake quality test)' % (df_mframe.lake_qual_pass.sum(), df_mframe.lake_qual_pass.count()))
             
             
 ##########################################################################################
@@ -935,7 +935,7 @@ def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progres
         # keep going until there is no change (i.e. no more segments can be merged further)
         while any_merges:
 
-            print('   --> iteration %3d, number of lakes: %4d' % (iteration, n_lakes))
+            print('     --> iteration %4d, number of lakes: %5d' % (iteration, n_lakes))
             start_mframe_old = start_mframe
             stop_mframe_old = stop_mframe
             surf_elevs_old = surf_elevs
@@ -1053,7 +1053,7 @@ def merge_lakes(df_mframe, max_dist_mframes=10, max_dist_elev=0.1, print_progres
 def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0.2): 
     
     print('---> checking lake edges and extending them if the surface elevation matches')
-    print('extending lake', end=' ')
+    print('     extending lake', end=' ')
     for i in range(len(df_extracted_lakes)):
         try:
             print(' %i:'%i, end='')
@@ -1101,9 +1101,9 @@ def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0
             traceback.print_exc()
             
     # limit to lakes longer than just one major frame
-    longer_than1 = (df_extracted_lakes.mframe_end - df_extracted_lakes.mframe_start) > 0
-    df_extracted_lakes = df_extracted_lakes[longer_than1].copy()
-    df_extracted_lakes.reset_index(inplace=True)
+    # longer_than1 = (df_extracted_lakes.mframe_end - df_extracted_lakes.mframe_start) > 0
+    # df_extracted_lakes = df_extracted_lakes[longer_than1].copy()
+    # df_extracted_lakes.reset_index(inplace=True)
 
     # expand each lake by two major frames (if these major frames exist)
     print(' ')
@@ -1150,7 +1150,7 @@ def calculate_remaining_densities(df, df_mframe, df_extracted_lakes, gtx, ancill
             
 ##########################################################################################
 def print_results(lake_list, gtx):
-    print(('results for : %s' % gtx).upper())
+    print(('\nresults for : %s' % gtx).upper())
     try:
         if len(lake_list) == 0: print('<<<   SAD. NO LAKES :(   >>>')
         else:
@@ -1159,7 +1159,7 @@ def print_results(lake_list, gtx):
                                                    lake.lat_str, lake.lon_str, lake.length_extent/1000, 
                                                    lake.surface_elevation, lake.detection_quality))
     except:
-        print('Something went wrong here... You may want to check that out.')
+        print('     Something went wrong here... You may want to check that out.')
         traceback.print_exc()
 
             
@@ -1181,22 +1181,28 @@ def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon
             if i==len(list_of_lakes):
                 break;
 
-            # just delete if no surface extent
-            if (len(lk1.surface_extent_detection)==0) | (len(lk2.surface_extent_detection)==0):
-                if verbose: print('found lake with no continuous surface extent --> tossing this one out.')
-                if len(lk2.surface_extent_detection)==0: del list_of_lakes[i]
-                if len(lk1.surface_extent_detection)==0: 
-                    list_of_lakes[i-1] = lk2
-                    del list_of_lakes[i]
+            # just delete if no surface extent (usually means messy cloudy data)
+            if (len(lk1.surface_extent_detection)==0) & (len(lk2.surface_extent_detection)==0):
+                if verbose:
+                    print('     lakes %i and %i: no continuous surface extents --> tossing these out (usually means clouds / noise-only data)' % (i, i-1))
+                del list_of_lakes[i]
+                del list_of_lakes[i-1]
+            elif len(lk2.surface_extent_detection)==0:
+                print('     lake %i: no continuous surface extent --> tossing this one out (usually means clouds / noise-only data)' % i)
+                del list_of_lakes[i]
+            elif len(lk1.surface_extent_detection)==0: 
+                print('     lake %i: no continuous surface extent --> tossing this one out (usually means clouds / noise-only data)' % (i-1))
+                list_of_lakes[i-1] = lk2
+                del list_of_lakes[i]
                 
             else:  
                 # if they fully overlap
                 if ranges_overlap(lk1.full_lat_extent_detection, lk2.full_lat_extent_detection):
 
-                    # merge if  surface elevation within 0.5 m
+                    # merge if surface elevation within 0.3 m
                     if np.abs(lk1.surface_elevation - lk2.surface_elevation) < 0.3:
                         if verbose:
-                            print('merging two lakes with overlapping surfaces...')
+                            print('     lakes %i and %i: merging two lakes with overlapping surfaces...' % (i, i-1))
                         mframe_start = int(np.min((lk1.mframe_start, lk2.mframe_start)))
                         mframe_end = int(np.max((lk1.mframe_end, lk2.mframe_end)))
                         surf_elev = lk1.surface_elevation
@@ -1211,7 +1217,7 @@ def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon
                     # else delete the one with lower quality 
                     else:
                         if verbose:
-                            print('found overlapping lakes that can\'t be merged. something\'s off here...')
+                            print('     lakes %i and %i: found overlapping lakes that can\'t be merged. something\'s off here...' % (i, i-1))
                         if lk2.detection_quality > lk1.detection_quality:
                             list_of_lakes[i-1] = lk2
                         del list_of_lakes[i]
@@ -1219,7 +1225,7 @@ def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon
                 # if the the lake surfaces don't overlap, but the attached lake segments do...
                 else: 
                     if verbose:
-                            print('lakes overlapping, but only in side lobes ...trimming extra photon data')
+                            print('     lakes %i and %i: overlapping, but only in buffer ...trimming extra photon data' % (i, i-1))
                     # if the data segments overlap, trim them 
                     lk1_datarange = [lk1.lat_min, lk1.lat_max]
                     lk2_datarange = [lk2.lat_min, lk2.lat_max]
@@ -1250,11 +1256,11 @@ def get_gtx_stats(df_ph, lake_list):
 ##########################################################################################
 # @profile
 def get_clipped_granule(input_filename, gtx, polygon):
+    print('\n-----------------------------------------------------------------------------\n')
     gtx_list, ancillary, photon_data, tlm_data = read_atl03(input_filename, geoid_h=True, gtxs_to_read=gtx)
     if len(photon_data)==0: return [], [0,0,0,0]
     
-    print('\n-----------------------------------------------------------------------------\n')
-    print('PROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
+    print('\nPROCESSING GROUND TRACK: %s (%s)' % (gtx, ancillary['gtx_strength_dict'][gtx]))
 
     # CLIP THE DATAFRAME TO THE NON-SIMPLIFIED POLYGON FOR THE REGION TO AVOID OVERLAP
     poly_nonsimplified = polygon.replace('simplified_', '')
@@ -1295,10 +1301,12 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
     df_lakes = merge_lakes(df_mframe, print_progress=verbose, debug=verbose)
     if df_lakes is None: 
         return [], [df.xatc.max()-df.xatc.min(), 0.0, df.h.count(), 0]
+
+    # to fix noise-only lakes earlier could look for code with longer_than1 (limits lakes to be two major frames at least)
     df_lakes = check_lake_surroundings(df_mframe, df_lakes)
     calculate_remaining_densities(df, df_mframe, df_lakes, gtx, ancillary)
     
-    # create a list of lake object, and calculate some stats for each
+    # create a list of lake objects, and calculate some stats for each
     thelakes = []
     if df_lakes is not None:
         for i in range(len(df_lakes)):
@@ -1309,11 +1317,34 @@ def detect_lakes(input_filename, gtx, polygon, verbose=False):
             thislake.get_surface_extent()
             thislake.calc_quality_lake()
             thelakes.append(thislake)
-    
+
+    ################################################################
+    # # debug code for disappearing lakes
+    # for ilk, lk in enumerate(thelakes):
+    #     try:
+    #         fig = lk.plot_detected(verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True, closefig=True, ph_color='r')
+    #         lat_string = lk.lat_str.replace('°', '_').replace('.', '_')
+    #         fig.savefig('zzz_duplicate_plots/removalcheck_%s_%s_beforeremoval_%05i.jpg' % (lk.gtx, lat_string, ilk))
+    #     except:
+    #         traceback.print_exc()
+        
     # remove any duplicates and make sure data segments don't overlap into other lakes' water surfaces
-    print('...removing duplicate lakes')
-    thelakes = remove_duplicate_lakes(thelakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=verbose)          
+    n_lakes = len(thelakes)
+    print('---> removing duplicate and noise-only lakes from total of %d lakes...' % n_lakes)
+    thelakes = remove_duplicate_lakes(thelakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=True)
+    # thelakes = remove_duplicate_lakes(thelakes, df, df_mframe, gtx, ancillary, polygon, nsubsegs, verbose=verbose) 
+    print('     ---> removed %d lakes, %d remaining.' % (n_lakes-len(thelakes), len(thelakes)))
     print_results(thelakes, gtx)
+
+    # # debug code for disappearing lakes, second part
+    # for ilk, lk in enumerate(thelakes):
+    #     try:
+    #         fig = lk.plot_detected(verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True, closefig=True, ph_color=None)
+    #         lat_string = lk.lat_str.replace('°', '_').replace('.', '_')
+    #         fig.savefig('zzz_duplicate_plots/removalcheck_%s_%s_postremoval_%05i.jpg' % (lk.gtx, lat_string, ilk))
+    #     except:
+    #         traceback.print_exc()
+    ################################################################
     
     # get gtx stats
     gtx_stats = get_gtx_stats(df, thelakes)
@@ -1600,47 +1631,63 @@ class melt_lake:
     
 
     #-------------------------------------------------------------------------------------
-    def plot_detected(self, fig_dir='figs', verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True, closefig=True):
+    def plot_detected(self, fig_dir='figs', verbose=False, min_width=0.0, min_depth=0.0, print_mframe_info=True, closefig=True, ph_color=None):
 
         import matplotlib
         from matplotlib.patches import Rectangle
 
-        if len(self.detection_2nd_returns['h'])>0:
-            lake_minh = np.min(self.detection_2nd_returns['h'])
-        else: return
-        lake_max_depth = np.abs(self.main_peak - np.min(self.detection_2nd_returns['h']))
-        lake_segment_length = np.abs(np.max(self.detection_2nd_returns['xatc']) - np.min(self.detection_2nd_returns['xatc']))
-        lake_maxh = np.min((self.mframe_data['peak'].max(), self.main_peak+0.5*lake_max_depth))
-        buffer_bottom = np.max((0.5*lake_max_depth, 2.0))
-        lake_minh_plot = lake_minh - buffer_bottom
-        buffer_top = (lake_maxh - lake_minh_plot) * 0.5
-        lake_maxh_plot = lake_maxh + buffer_top
-        ylms = (lake_minh_plot, lake_maxh_plot)
+        try:
+            if len(self.detection_2nd_returns['h'])>0:
+                lake_minh = np.min(self.detection_2nd_returns['h'])
+            # else: return
+            lake_max_depth = np.abs(self.main_peak - np.min(self.detection_2nd_returns['h']))
+            lake_segment_length = np.abs(np.max(self.detection_2nd_returns['xatc']) - np.min(self.detection_2nd_returns['xatc']))
+            lake_maxh = np.min((self.mframe_data['peak'].max(), self.main_peak+0.5*lake_max_depth))
+            buffer_bottom = np.max((0.5*lake_max_depth, 2.0))
+            lake_minh_plot = lake_minh - buffer_bottom
+            buffer_top = (lake_maxh - lake_minh_plot) * 0.5
+            lake_maxh_plot = lake_maxh + buffer_top
+            ylms = (lake_minh_plot, lake_maxh_plot)
+        except:
+            ylms = (self.main_peak+5, self.main_peak-10)
         xlms = (0.0, self.mframe_data.xatc_max.max())
 
-        if (lake_max_depth > min_depth) & (lake_segment_length > min_width):
-            fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
+        # if (lake_max_depth > min_depth) & (lake_segment_length > min_width):
+        fig, ax = plt.subplots(figsize=[9, 5], dpi=100)
 
-            # plot the ATL03 photon data
-            dfp = self.photon_data[~self.photon_data.is_afterpulse]
+        # plot the ATL03 photon data
+        dfp = self.photon_data[~self.photon_data.is_afterpulse]
+        if not ph_color:
             scatt = ax.scatter(dfp.xatc, dfp.h,s=5, c=dfp.snr, alpha=1, edgecolors='none', cmap=cmc.lajolla, vmin=0, vmax=1)
             p_scatt = ax.scatter([-9999]*4, [-9999]*4, s=15, c=[0.0,0.25,0.75,1.0], alpha=1, edgecolors='none', cmap=cmc.lajolla, 
                                  vmin=0, vmax=1, label='ATL03 photons')
+        else:
+            scatt = ax.scatter(dfp.xatc, dfp.h,s=5, color=ph_color, edgecolors='none')
+            p_scatt = ax.scatter([-9999]*4, [-9999]*4, s=15, color=ph_color, alpha=1, edgecolors='none', label='ATL03 photons')
 
-            # plot surface elevation
+        # plot surface elevation
+        try:
             for xtent in self.surface_extent_detection:
                 ax.plot(xtent, [self.surface_elevation, self.surface_elevation], 'g-', lw=3)
             p_surf_elev, = ax.plot([-9999]*2, [-9999]*2, 'g-', lw=3, label='lake surface')
+        except:
+            print('could not plot surface extent')
 
-            # plot the second returns from detection
+        # plot the second returns from detection
+        try:
             for j, prom in enumerate(self.detection_2nd_returns['prom']):
                 ax.plot(self.detection_2nd_returns['xatc'][j], self.detection_2nd_returns['h'][j], 
                                         marker='o', mfc='none', mec='b', linestyle = 'None', ms=prom*8)
             p_2nd_return, = ax.plot(-9999, -9999, marker='o', mfc='none', mec='b', ls='None', ms=3, label='second returns')
+        except:
+            print('could not plot second returns')
 
-            # plot mframe bounds
+        # plot mframe bounds
+        try:
             ymin, ymax = ax.get_ylim()
-            mframe_bounds_xatc = list(self.mframe_data['xatc_min']) + [self.mframe_data['xatc_max'].iloc[-1]]
+            #mframe_bounds_xatc = list(self.mframe_data['xatc_min']) + [self.mframe_data['xatc_max'].iloc[-1]]
+            mframe_mids = list((np.array(self.mframe_data['xatc_min'].iloc[1:]) + np.array(self.mframe_data['xatc_max'].iloc[:-1]))/2)
+            mframe_bounds_xatc = [self.photon_data['xatc'].min()] +  mframe_mids + [self.photon_data['xatc'].max()]
             for xmframe in mframe_bounds_xatc:
                 ax.plot([xmframe, xmframe], [ymin, ymax], 'k-', lw=0.5)
 
@@ -1648,18 +1695,21 @@ class melt_lake:
             for i, passing in enumerate(self.mframe_data['lake_qual_pass']):
                 mf = self.mframe_data.iloc[i]
                 if passing:
-                    xy = (mf.xatc_min, ylms[0])
-                    width = mf.xatc_max - mf.xatc_min
+                    xy = (mframe_bounds_xatc[i], ylms[0])
+                    width = mframe_bounds_xatc[i+1] - mframe_bounds_xatc[i]
                     height = ylms[1] - ylms[0]
                     rct = Rectangle(xy, width, height, ec=(1,1,1,0), fc=(0,0,1,0.1), zorder=-1000, label='major frame passed lake check')
                     p_passed = ax.add_patch(rct)
                 p_mfpeak, = ax.plot((mf.xatc_min,mf.xatc_max), (mf.peak,mf.peak),'k-',lw=0.5, label='major frame peak')
+        except:
+            print('could not plot mframe bounds')
 
-            # add a legend
-            hdls = [p_scatt, p_surf_elev, p_2nd_return, p_mfpeak, p_passed]
-            ax.legend(handles=hdls, loc='lower left', fontsize=7, scatterpoints=4)
+        # add a legend
+        hdls = [p_scatt, p_surf_elev, p_2nd_return, p_mfpeak, p_passed]
+        ax.legend(handles=hdls, loc='lower left', fontsize=7, scatterpoints=4)
 
-            # add the colorbar 
+        # add the colorbar 
+        try:
             divider = make_axes_locatable(ax)
             cax = divider.append_axes('right', size='4%', pad=0.05)
             cbar = fig.colorbar(scatt, cax=cax, orientation='vertical')
@@ -1668,8 +1718,11 @@ class melt_lake:
                 cbar.ax.text(.5, lab, '%.1f'%lab, ha='center', va='center', fontweight='black')
             cbar.ax.get_yaxis().labelpad = 15
             cbar.ax.set_ylabel('photon density', rotation=270, fontsize=8)
+        except:
+            print('could not add colorbar')
 
-            # add labels and description in title
+        # add labels and description in title
+        try:
             txt  = 'ICESat-2 Lake Detection: %s, ' % ('Greenland Ice Sheet' if self.lat>=0 else 'Antarctic Ice Sheet')
             txt += '%s Melt Season' % self.melt_season
             fig.suptitle(txt, y=0.95, fontsize=14)
@@ -1680,15 +1733,18 @@ class melt_lake:
             txt += 'beam %i (%s, %s spacecraft orientation) | ' % (self.beam_number, self.beam_strength, self.sc_orient)
             txt += 'granule ID: %s' % self.granule_id
             ax.set_title(txt, fontsize=8)
+        except:
+            print('could not add info in title')
 
-            ax.set_ylabel('elevation above geoid [m]',fontsize=8)
-            ax.tick_params(axis='x', which='major', labelsize=7)
-            ax.tick_params(axis='y', which='major', labelsize=6)
-            # set limits
-            ax.set_ylim(ylms)
-            ax.set_xlim(xlms)
+        ax.set_ylabel('elevation above geoid [m]',fontsize=8)
+        ax.tick_params(axis='x', which='major', labelsize=7)
+        ax.tick_params(axis='y', which='major', labelsize=6)
+        # set limits
+        ax.set_ylim(ylms)
+        ax.set_xlim(xlms)
 
-            # add latitude
+        # add latitude
+        try:
             #_________________________________________________________
             lx = self.photon_data.sort_values(by='xatc').iloc[[0,-1]][['xatc','lat']].reset_index(drop=True)
             _lat = np.array(lx.lat)
@@ -1704,14 +1760,20 @@ class melt_lake:
             # secax.ticklabel_format(useOffset=False) # show actual readable latitude values
             secax.ticklabel_format(useOffset=False, style='plain')
             ax.ticklabel_format(useOffset=False, style='plain')
+        except:
+            print('could not add latitude on x-axis')
 
-            # rename x ticks
+        # rename x ticks
+        try:
             xticklabs = ['%g km' % (xt/1000) for xt in list(ax.get_xticks())]
             ticks = ax.get_xticks()
             ax.set_xticks(ticks)
             ax.set_xticklabels(xticklabs)
+        except:
+            print('could not rename xticks')
 
-            # add mframe info text
+        # add mframe info text
+        try:
             if print_mframe_info:
                 txt  = 'mframe:\n'
                 txt += 'photons:\n'
@@ -1751,8 +1813,11 @@ class melt_lake:
                     trans = ax.get_xaxis_transform()
                     bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
                     ax.text(loc, 0.98, txt, transform=trans, fontsize=4,ha='center', va='top', bbox=bbox)
+        except:
+            print('could not add major frame info text')
 
-            # add detection quality description
+        # add detection quality description
+        try:
             txt  = 'LAKE QUALITY: %6.4f'%self.detection_quality
             txt += '\n---------------------------\n'
             txt += '2nd returns: %6.4f\n' % self.detection_quality_info['strength_2nd_returns']
@@ -1762,17 +1827,18 @@ class melt_lake:
             txt += 'depth range: %6.4f' % self.detection_quality_info['h_range_2nd_returns']
             bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
             ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=6, weight='bold', bbox=bbox)
+        except:
+            print('could not add detection quality description')
 
-            fig.patch.set_facecolor('white')
-            fig.tight_layout()
-            ax.set_ylim(ylms)
-            ax.set_xlim(xlms)
-            if closefig: 
-                plt.close(fig)
+        fig.patch.set_facecolor('white')
+        fig.tight_layout()
+        ax.set_ylim(ylms)
+        ax.set_xlim(xlms)
+        if closefig: 
+            plt.close(fig)
 
-            return fig
+        return fig
 
-            
     #-------------------------------------------------------------------------------------
     def surrf(self, final_resolution=5.0):
 
@@ -2065,6 +2131,7 @@ class melt_lake:
         self.depth_data = evaldf[['xatc', 'lat', 'lon', 'depth', 'conf', 'h_fit_surf', 'h_fit_bed', 'std_surf', 'std_bed']].copy()
         self.surface_elevation = surf_elev
         self.lake_quality = depth_quality
+        depth_quality_sort = 0.0 if np.isnan(depth_quality_sort) else depth_quality_sort
         self.quality_sort = depth_quality_sort
         self.max_depth = evaldf.depth[evaldf.conf>0.0].max()
    
@@ -2077,173 +2144,225 @@ class melt_lake:
 
         if not hasattr(self, 'depth_data'):
             print('Lake has no depth data. Skipping...')
-            return
-            
-        dfd = self.depth_data
-        surf_elev = self.surface_elevation
-        below_surf = dfd.depth > 0.0
-        plot_surf = np.ones_like(dfd.h_fit_surf)*surf_elev
-        plot_surf[~below_surf] = np.nan
-        plot_bed = np.array(dfd.h_fit_bed)
-        plot_bed[~below_surf] = np.nan
+
+        try:
+            dfd = self.depth_data
+            surf_elev = self.surface_elevation
+            below_surf = dfd.depth > 0.0
+            plot_surf = np.ones_like(dfd.h_fit_surf)*surf_elev
+            plot_surf[~below_surf] = np.nan
+            plot_bed = np.array(dfd.h_fit_bed)
+            plot_bed[~below_surf] = np.nan
+        except:
+            print('could not calculate depths')
 
         # plot the ATL03 photon data
-        scatt = ax.scatter(self.photon_data.xatc, self.photon_data.h,s=5, c=self.photon_data.snr, alpha=1, 
-                           edgecolors='none', cmap=cmc.lajolla, vmin=0, vmax=1)
-        p_scatt = ax.scatter([-9999]*4, [-9999]*4, s=15, c=[0.0,0.25,0.75,1.0], alpha=1, edgecolors='none', cmap=cmc.lajolla, 
-                             vmin=0, vmax=1, label='ATL03 photons')
+        try:
+            scatt = ax.scatter(self.photon_data.xatc, self.photon_data.h,s=5, c=self.photon_data.snr, alpha=1, 
+                               edgecolors='none', cmap=cmc.lajolla, vmin=0, vmax=1)
+            p_scatt = ax.scatter([-9999]*4, [-9999]*4, s=15, c=[0.0,0.25,0.75,1.0], alpha=1, edgecolors='none', cmap=cmc.lajolla, 
+                                 vmin=0, vmax=1, label='ATL03 photons')
+        except:
+            print('could not plot atl03 photons')
 
         # plot the second returns from detection
-        for j, prom in enumerate(self.detection_2nd_returns['prom']):
-            ax.plot(self.detection_2nd_returns['xatc'][j], self.detection_2nd_returns['h'][j], 
-                                    marker='o', mfc='none', mec='b', linestyle = 'None', ms=prom*5, alpha=0.5)
-        p_2nd_return, = ax.plot(-9999, -9999, marker='o', mfc='none', mec='b', ls='None', ms=3, label='second return peaks (detection)')
+        try:
+            for j, prom in enumerate(self.detection_2nd_returns['prom']):
+                ax.plot(self.detection_2nd_returns['xatc'][j], self.detection_2nd_returns['h'][j], 
+                                        marker='o', mfc='none', mec='b', linestyle = 'None', ms=prom*5, alpha=0.5)
+            p_2nd_return, = ax.plot(-9999, -9999, marker='o', mfc='none', mec='b', ls='None', ms=3, label='second return peaks (detection)')
+        except:
+            print('could not plot second returns from detection')
 
         # plot surface elevation and the fit to the lake bed
-        p_surf_elev, = ax.plot(dfd.xatc, plot_surf, 'g-', label='lake surface')
-        p_bed_fit, = ax.plot(dfd.xatc, plot_bed, 'b-', label='lake bed fit')
+        try:
+            p_surf_elev, = ax.plot(dfd.xatc, plot_surf, 'g-', label='lake surface')
+            p_bed_fit, = ax.plot(dfd.xatc, plot_bed, 'b-', label='lake bed fit')
+        except:
+            print('could not plot surface and lakebed fits')
 
         # plot the water depth on second axis (but zero aligned with the lake surface elevation 
-        ax2 = ax.twinx()
-        p_water_depth = ax2.scatter(dfd.xatc, dfd.depth, s=3, c=[(1, 1-x, 1-x) for x in dfd.conf], label='water depth')
-        yl1 = np.array([surf_elev - 1.5*1.336*dfd.depth.max(), surf_elev + 1.336*dfd.depth.max()])
-        ylms = yl1
-        yl2 = yl1 - surf_elev
+        try:
+            ax2 = ax.twinx()
+            p_water_depth = ax2.scatter(dfd.xatc, dfd.depth, s=3, c=[(1, 1-x, 1-x) for x in dfd.conf], label='water depth')
+            yl1 = np.array([surf_elev - 1.5*1.336*dfd.depth.max(), surf_elev + 1.336*dfd.depth.max()])
+            ylms = yl1
+            yl2 = yl1 - surf_elev
+        except:
+            print('could not plot water depth')
 
         # plot mframe bounds
-        ymin, ymax = ax.get_ylim()
-        mframe_bounds_xatc = list(self.mframe_data['xatc_min']) + [self.mframe_data['xatc_max'].iloc[-1]]
-        for xmframe in mframe_bounds_xatc:
-            ax.plot([xmframe, xmframe], [ymin, ymax], 'k-', lw=0.5)
+        try:
+            ymin, ymax = ax.get_ylim()
+            #mframe_bounds_xatc = list(self.mframe_data['xatc_min']) + [self.mframe_data['xatc_max'].iloc[-1]]
+            mframe_mids = list((np.array(self.mframe_data['xatc_min'].iloc[1:]) + np.array(self.mframe_data['xatc_max'].iloc[:-1]))/2)
+            mframe_bounds_xatc = [self.photon_data['xatc'].min()] +  mframe_mids + [self.photon_data['xatc'].max()]
+            for xmframe in mframe_bounds_xatc:
+                ax.plot([xmframe, xmframe], [ymin, ymax], 'k-', lw=0.5)
 
-        # visualize which segments initially passed
-        for i, passing in enumerate(self.mframe_data['lake_qual_pass']):
-            mf = self.mframe_data.iloc[i]
-            if passing:
-                xy = (mf.xatc_min, ylms[0])
-                width = mf.xatc_max - mf.xatc_min
-                height = ylms[1] - ylms[0]
-                rct = Rectangle(xy, width, height, ec=(1,1,1,0), fc=(0,0,1,0.1), zorder=-1000, label='major frame passed lake check')
-                p_passed = ax.add_patch(rct)
-            p_mfpeak, = ax.plot((mf.xatc_min,mf.xatc_max), (mf.peak,mf.peak),'k-',lw=0.5, label='major frame peak')
+            # visualize which segments initially passed
+            for i, passing in enumerate(self.mframe_data['lake_qual_pass']):
+                mf = self.mframe_data.iloc[i]
+                if passing:
+                    xy = (mframe_bounds_xatc[i], ylms[0])
+                    width = mframe_bounds_xatc[i+1] - mframe_bounds_xatc[i]
+                    height = ylms[1] - ylms[0]
+                    rct = Rectangle(xy, width, height, ec=(1,1,1,0), fc=(0,0,1,0.1), zorder=-1000, label='major frame passed lake check')
+                    p_passed = ax.add_patch(rct)
+                p_mfpeak, = ax.plot((mf.xatc_min,mf.xatc_max), (mf.peak,mf.peak),'k-',lw=0.5, label='major frame peak')
+        except:
+            print('could not plot mframe bounds')
 
         # add a legend
-        hdls = [p_scatt, p_surf_elev, p_bed_fit, p_water_depth, p_2nd_return, p_mfpeak, p_passed]
-        ax.legend(handles=hdls, loc='lower left', fontsize=7, scatterpoints=4)
+        try:
+            hdls = [p_scatt, p_surf_elev, p_bed_fit, p_water_depth, p_2nd_return, p_mfpeak, p_passed]
+            ax.legend(handles=hdls, loc='lower left', fontsize=7, scatterpoints=4)
+        except:
+            print('could not add legend')
 
         # add the colorbar 
-        divider = make_axes_locatable(ax2)
-        cax = divider.append_axes('right', size='4%', pad=0.5)
-        cax.axis('off')
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size='4%', pad=0.5)
-        cbar = fig.colorbar(scatt, cax=cax, orientation='vertical')
-        cbar.ax.get_yaxis().set_ticks([])
-        for j, lab in enumerate([0.2, 0.4, 0.6, 0.8]):
-            cbar.ax.text(.5, lab, '%.1f'%lab, ha='center', va='center', fontweight='black')
-        cbar.ax.get_yaxis().labelpad = 15
-        cbar.ax.set_ylabel('photon density', rotation=270, fontsize=8)
+        try:
+            divider = make_axes_locatable(ax2)
+            cax = divider.append_axes('right', size='4%', pad=0.5)
+            cax.axis('off')
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size='4%', pad=0.5)
+            cbar = fig.colorbar(scatt, cax=cax, orientation='vertical')
+            cbar.ax.get_yaxis().set_ticks([])
+            for j, lab in enumerate([0.2, 0.4, 0.6, 0.8]):
+                cbar.ax.text(.5, lab, '%.1f'%lab, ha='center', va='center', fontweight='black')
+            cbar.ax.get_yaxis().labelpad = 15
+            cbar.ax.set_ylabel('photon density', rotation=270, fontsize=8)
+        except:
+            print('could not add colorbar')
 
         # add labels and description in title
-        txt  = 'ICESat-2 Melt Lake: %s, ' % ('Greenland Ice Sheet' if self.lat>=0 else 'Antarctic Ice Sheet')
-        txt += '%s Melt Season' % self.melt_season
-        fig.suptitle(txt, y=0.95, fontsize=14)
+        try:
+            txt  = 'ICESat-2 Melt Lake: %s, ' % ('Greenland Ice Sheet' if self.lat>=0 else 'Antarctic Ice Sheet')
+            txt += '%s Melt Season' % self.melt_season
+            fig.suptitle(txt, y=0.95, fontsize=14)
+        except:
+            print('could not add title')
 
-        txt  = 'location: %s, %s (area: %s) | ' % (self.lat_str, self.lon_str, self.polygon_name)
-        txt += 'time: %s UTC | surface elevation: %.2f m\n' % (self.date_time, self.surface_elevation)
-        txt += 'RGT %s %s cycle %i | ' % (self.rgt, self.gtx.upper(), self.cycle_number)
-        txt += 'beam %i (%s, %s spacecraft orientation) | ' % (self.beam_number, self.beam_strength, self.sc_orient)
-        txt += 'granule ID: %s' % self.granule_id
-        ax.set_title(txt, fontsize=8)
+        try:
+            txt  = 'location: %s, %s (area: %s) | ' % (self.lat_str, self.lon_str, self.polygon_name)
+            txt += 'time: %s UTC | surface elevation: %.2f m\n' % (self.date_time, self.surface_elevation)
+            txt += 'RGT %s %s cycle %i | ' % (self.rgt, self.gtx.upper(), self.cycle_number)
+            txt += 'beam %i (%s, %s spacecraft orientation) | ' % (self.beam_number, self.beam_strength, self.sc_orient)
+            txt += 'granule ID: %s' % self.granule_id
+            ax.set_title(txt, fontsize=8)
+        except:
+            print('could not add main description')
 
-        ax.set_ylabel('elevation above geoid [m]',fontsize=8,labelpad=0)
-        ax2.set_ylabel('water depth [m]',fontsize=8,labelpad=0)
-        ax.tick_params(axis='x', which='major', labelsize=7)
-        ax.tick_params(axis='y', which='major', labelsize=6)
-        ax2.tick_params(axis='y', which='major', labelsize=7)
+        try:
+            ax.set_ylabel('elevation above geoid [m]',fontsize=8,labelpad=0)
+            ax2.set_ylabel('water depth [m]',fontsize=8,labelpad=0)
+            ax.tick_params(axis='x', which='major', labelsize=7)
+            ax.tick_params(axis='y', which='major', labelsize=6)
+            ax2.tick_params(axis='y', which='major', labelsize=7)
+        except:
+            print('could not add axis labels')
         
         # set limits
-        ax.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
-        ax.set_ylim(yl1)
-        ax2.set_ylim(-yl2)
+        try:
+            ax.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+            ax.set_ylim(yl1)
+            ax2.set_ylim(-yl2)
+        except:
+            print('could not set axes limits')
 
         # add latitude
-        #_________________________________________________________
-        lx = self.photon_data.sort_values(by='xatc').iloc[[0,-1]][['xatc','lat']].reset_index(drop=True)
-        _lat = np.array(lx.lat)
-        _xatc = np.array(lx.xatc)
-        def lat2xatc(l):
-            return _xatc[0] + (l - _lat[0]) * (_xatc[1] - _xatc[0]) /(_lat[1] - _lat[0])
-        def xatc2lat(x):
-            return _lat[0] + (x - _xatc[0]) * (_lat[1] - _lat[0]) / (_xatc[1] - _xatc[0])
-        secax = ax.secondary_xaxis(-0.065, functions=(xatc2lat, lat2xatc))
-        secax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-        secax.set_xlabel('latitude / along-track distance (km)',fontsize=8,labelpad=0)
-        secax.tick_params(axis='both', which='major', labelsize=7)
-        # secax.ticklabel_format(useOffset=False) # show actual readable latitude values
-        secax.ticklabel_format(useOffset=False, style='plain')
-        ax.ticklabel_format(useOffset=False, style='plain')
+        try:
+            #_________________________________________________________
+            lx = self.photon_data.sort_values(by='xatc').iloc[[0,-1]][['xatc','lat']].reset_index(drop=True)
+            _lat = np.array(lx.lat)
+            _xatc = np.array(lx.xatc)
+            def lat2xatc(l):
+                return _xatc[0] + (l - _lat[0]) * (_xatc[1] - _xatc[0]) /(_lat[1] - _lat[0])
+            def xatc2lat(x):
+                return _lat[0] + (x - _xatc[0]) * (_lat[1] - _lat[0]) / (_xatc[1] - _xatc[0])
+            secax = ax.secondary_xaxis(-0.065, functions=(xatc2lat, lat2xatc))
+            secax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+            secax.set_xlabel('latitude / along-track distance (km)',fontsize=8,labelpad=0)
+            secax.tick_params(axis='both', which='major', labelsize=7)
+            # secax.ticklabel_format(useOffset=False) # show actual readable latitude values
+            secax.ticklabel_format(useOffset=False, style='plain')
+            ax.ticklabel_format(useOffset=False, style='plain')
+        except:
+            print('could not add latitude axis')
 
         # rename x ticks
-        xticklabs = ['%g km' % (xt/1000) for xt in list(ax.get_xticks())]
-        ticks = ax.get_xticks()
-        ax.set_xticks(ticks)
-        ax.set_xticklabels(xticklabs)
+        try:
+            xticklabs = ['%g km' % (xt/1000) for xt in list(ax.get_xticks())]
+            ticks = ax.get_xticks()
+            ax.set_xticks(ticks)
+            ax.set_xticklabels(xticklabs)
+        except:
+            print('could not rename xlabels')
 
         # add mframe info text
-        if print_mframe_info:
-            txt  = 'mframe:\n'
-            txt += 'photons:\n'
-            txt += 'peak:\n'
-            txt += 'flat:\n'
-            txt += 'SNR surf all:\n'
-            txt += 'SNR surf above:\n'
-            txt += 'SNR up:\n'
-            txt += 'SNR low:\n'
-            txt += '2nds:\n'
-            txt += '2nds strength:\n'
-            txt += '2nds number:\n'
-            txt += '2nds spread:\n'
-            txt += '2nds align:\n'
-            txt += '2nds quality:\n'
-            txt += 'pass:'
-            # trans = ax.get_xaxis_transform()
-            bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
-            ax.text(-0.005, 0.98, txt, transform=ax.transAxes, fontsize=4, ha='right', va='top', bbox=bbox)
-            for i,loc in enumerate(self.mframe_data['xatc']):
-                mf = self.mframe_data.iloc[i]
-                txt  = '%i\n' % (mf.name%1000)
-                txt += '%i\n' % mf.n_phot
-                txt += '%.2f\n' % mf.peak
-                txt += '%s\n' % ('Yes.' if mf.is_flat else 'No.')
-                txt += '%i\n' % np.round(mf.snr_surf)
-                txt += '%i\n' % np.round(mf.snr_allabove)
-                txt += '%i\n' % np.round(mf.snr_upper)
-                txt += '%i\n' % np.round(mf.snr_lower)
-                txt += '%i%%\n' % np.round(mf.ratio_2nd_returns*100)
-                txt += '%.2f\n' % mf.quality_secondreturns
-                txt += '%.2f\n' % mf.length_penalty
-                txt += '%.2f\n' % mf.range_penalty
-                txt += '%.2f\n' % mf.alignment_penalty
-                txt += '%.2f\n' % mf.quality_summary
-                txt += '%s' % ('Yes.' if mf.lake_qual_pass else 'No.')
-                trans = ax.get_xaxis_transform()
-                
+        try:
+            if print_mframe_info:
+                txt  = 'mframe:\n'
+                txt += 'photons:\n'
+                txt += 'peak:\n'
+                txt += 'flat:\n'
+                txt += 'SNR surf all:\n'
+                txt += 'SNR surf above:\n'
+                txt += 'SNR up:\n'
+                txt += 'SNR low:\n'
+                txt += '2nds:\n'
+                txt += '2nds strength:\n'
+                txt += '2nds number:\n'
+                txt += '2nds spread:\n'
+                txt += '2nds align:\n'
+                txt += '2nds quality:\n'
+                txt += 'pass:'
+                # trans = ax.get_xaxis_transform()
                 bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
-                if (loc>dfd.xatc.min()) & (loc<dfd.xatc.max()):
-                    ax.text(loc, 0.98, txt, transform=trans, fontsize=4,ha='center', va='top', bbox=bbox)
+                ax.text(-0.005, 0.98, txt, transform=ax.transAxes, fontsize=4, ha='right', va='top', bbox=bbox)
+                for i,loc in enumerate(self.mframe_data['xatc']):
+                    mf = self.mframe_data.iloc[i]
+                    txt  = '%i\n' % (mf.name%1000)
+                    txt += '%i\n' % mf.n_phot
+                    txt += '%.2f\n' % mf.peak
+                    txt += '%s\n' % ('Yes.' if mf.is_flat else 'No.')
+                    txt += '%i\n' % np.round(mf.snr_surf)
+                    txt += '%i\n' % np.round(mf.snr_allabove)
+                    txt += '%i\n' % np.round(mf.snr_upper)
+                    txt += '%i\n' % np.round(mf.snr_lower)
+                    txt += '%i%%\n' % np.round(mf.ratio_2nd_returns*100)
+                    txt += '%.2f\n' % mf.quality_secondreturns
+                    txt += '%.2f\n' % mf.length_penalty
+                    txt += '%.2f\n' % mf.range_penalty
+                    txt += '%.2f\n' % mf.alignment_penalty
+                    txt += '%.2f\n' % mf.quality_summary
+                    txt += '%s' % ('Yes.' if mf.lake_qual_pass else 'No.')
+                    trans = ax.get_xaxis_transform()
+                    
+                    bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
+                    if (loc>dfd.xatc.min()) & (loc<dfd.xatc.max()):
+                        ax.text(loc, 0.98, txt, transform=trans, fontsize=4,ha='center', va='top', bbox=bbox)
+        except:
+            print('could not add detailed mframe info')
 
         # add detection quality description
-        txt  = 'LAKE QUALITY: %6.2f'%self.lake_quality
-        bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
-        ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=10, weight='bold', bbox=bbox)
+        try:
+            txt  = 'LAKE QUALITY: %6.2f'%self.lake_quality
+            bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
+            ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=10, weight='bold', bbox=bbox)
+        except:
+            print('could not add quality info')
 
-        fig.patch.set_facecolor('white')
-        fig.tight_layout()
-        ax.set_ylim(yl1)
-        ax2.set_ylim(-yl2)
-        ax.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
-        ax2.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+        try:
+            fig.patch.set_facecolor('white')
+            fig.tight_layout()
+            ax.set_ylim(yl1)
+            ax2.set_ylim(-yl2)
+            ax.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+            ax2.set_xlim((dfd.xatc.min(), dfd.xatc.max()))
+        except:
+            print('could not set figure layout')
         
         self.figure = fig
         if closefig: 
