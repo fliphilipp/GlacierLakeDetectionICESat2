@@ -13,6 +13,6 @@ log           = logs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).log
 error         = errs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).err
 output        = outs/job_$(descriptor)-$(ClusterID)_$(granule)-$(ProcID).out
 request_cpus    = 1
-request_memory  = 16GB
-request_disk    = 16GB
+request_memory  = 8GB
+request_disk    = 8GB
 queue granule,polygon,descriptor,polygon_full from granule_lists/GRE_2000_May2023_Sep2023_newdata.csv
