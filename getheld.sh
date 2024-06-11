@@ -23,6 +23,7 @@ declare -a HoldReasons=(
  "Transfer input files failure"
  "Job was held manually."
  "The job exceeded allowed execute duration"
+ "via condor"
 )
 
 filename_out=held_jobs/$clustername-$clusterid.csv

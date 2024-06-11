@@ -2,6 +2,9 @@
 # to release transfer input file held jobs
 condor_release fliphilipp -constraint "HoldReasonCode==13"
 
+condor_q -long <cluster>.<job>    # to see all classad attributes
+condor_q <cluster> -held -af HoldReasonSubCode    # 256 for the transfer input file error held jobs
+
 ###################################
 # to place running jobs on hold
 condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manually."
