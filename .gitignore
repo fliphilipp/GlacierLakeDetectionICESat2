@@ -8,6 +8,7 @@
 *.sif
 temp.csv
 IS2data/
+ed/
 __pycache__/
 .ipynb_checkpoints/
 *.bash_history
