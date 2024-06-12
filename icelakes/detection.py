@@ -1056,7 +1056,7 @@ def check_lake_surroundings(df_mframe, df_extracted_lakes, n_check=3, elev_tol=0
     print('     extending lake', end=' ')
     for i in range(len(df_extracted_lakes)):
         try:
-            print(' %i:'%i, end='')
+            print(' %i:'%(i+1), end='')
             thislake = df_extracted_lakes.iloc[i]
             thiselev = thislake['surf_elev']
 
@@ -1155,7 +1155,7 @@ def print_results(lake_list, gtx):
         if len(lake_list) == 0: print('<<<   SAD. NO LAKES :(   >>>')
         else:
             for i,lake in enumerate(lake_list): 
-                print('  lake %4i (%11s,%11s) length: %4.1f km, surface elevation: %7.2f m, quality: %.5f)' % (i, 
+                print('  lake %4i (%11s,%11s) length: %4.1f km, surface elevation: %7.2f m, quality: %.5f)' % (i+1, 
                                                    lake.lat_str, lake.lon_str, lake.length_extent/1000, 
                                                    lake.surface_elevation, lake.detection_quality))
     except:

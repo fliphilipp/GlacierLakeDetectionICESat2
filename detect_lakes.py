@@ -17,8 +17,11 @@
 # $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_SW.geojson
 # $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_CW.geojson
 
-# for detail plot legend fix
+# quick test, four lakes
 # python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/teslake_gris_bounding_box.geojson
+
+# for detail plot legend fix
+#  python3 detect_lakes.py --granule ATL03_20230918163607_13822005_006_02.h5 --polygon geojsons/simplified_GRE_2000_SE.geojson
 
 # for lake without depth data (surrf error / no detection extent)
 # python3 detect_lakes.py --granule ATL03_20230815055442_08562004_006_02.h5 --polygon geojsons/simplified_GRE_2000_NO.geojson
@@ -125,13 +128,14 @@ for gtx in gtx_list:
 try:
     if granule_stats[0] > 0:
         with open('success.txt', 'w') as f: print('we got some useable data from NSIDC!!', file=f)
-        print('Sucessfully got some useable data from NSIDC!!')
+        print('\n_____________________________________________________________________________\nSucessfully got some useable data from NSIDC!!')
 except:
     traceback.print_exc()
     
 # print stats for granule
 try:
-    print('\nGRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i\n' % tuple(granule_stats))
+    print('GRANULE STATS (length total, length lakes, photons total, photons lakes):%.3f,%.3f,%i,%i' % tuple(granule_stats))
+    print('_____________________________________________________________________________\n')
 except:
     traceback.print_exc()
 
@@ -143,7 +147,7 @@ except:
 
 # for each lake call the surrf algorithm for depth determination
 # if it fails, just skip the lake, but print trackeback for the logs 
-print('---> determining depth for each lake')
+print('---> determining depth for each lake in the granule')
 for i, lake in enumerate(lake_list):
     try: 
         lake.surrf()
@@ -160,52 +164,65 @@ for i, lake in enumerate(lake_list):
 # lake_list[:] = [lake for lake in lake_list if lake.lake_quality > 0]
 
 # for each lake 
+print('\n---> writing output data:')
 for i, lake in enumerate(lake_list):
-    try:
-        lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
-        filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.depth_quality_sort,0,None)*100)),
-                                                     lake.ice_sheet, lake.melt_season, 
-                                                     lake.lake_id)
-        figname = args.out_plot_dir + '/%s_quicklook.jpg' % filename_base
-        figname_detail = args.out_plot_dir + '/%s_details.jpg' % filename_base
-        h5name = args.out_data_dir + '/%s.h5' % filename_base
-        
-        # plot each lake and save to image
+    if hasattr(lake, 'depth_data'):
+        print('     lake %i:  ' % (i+1), end='')
         try:
-            fig = lake.plot_lake(closefig=True)
-            if fig is not None: fig.savefig(figname, dpi=150, bbox_inches='tight', pad_inches=0)
-        except:
-            print('Could not make MAIN figure for lake <%s>' % lake.lake_id)
-            traceback.print_exc()
-
-        # plot details for each lake and save to image
-        try:
-            fig = lake.plot_lake_detail(closefig=True)
-            if fig is not None: 
-                fig.savefig(figname_detail, dpi=100, bbox_inches='tight', pad_inches=0)
-        except:
-            print('detail_plotting_error:')
-            print('Could not make DETAIL figure for lake <%s>' % lake.lake_id)
-            traceback.print_exc()
-        
-        # export each lake to h5 and pickle
-        try:
-            datafile = lake.write_to_hdf5(h5name)
-            print('Wrote data file: %s, %s' % (datafile, get_size(datafile)))
-        except:
-            print('Could not write hdf5 file <%s>' % lake.lake_id)
-            traceback.print_exc()
-
-        # only keep files where it was possible to both write the figure and the data file
-        if os.path.isfile(figname) and (not os.path.isfile(h5name)):
-            os.remove(figname)
-        if os.path.isfile(figname_detail) and (not os.path.isfile(h5name)):
-            os.remove(figname_detail)
-        if os.path.isfile(h5name) and ((not os.path.isfile(figname)) and (not os.path.isfile(figname_detail))):
-            os.remove(h5name)
+            lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
+            filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.depth_quality_sort,0,None)*100)),
+                                                         lake.ice_sheet, lake.melt_season, 
+                                                         lake.lake_id)
+            figname = args.out_plot_dir + '/%s_quicklook.jpg' % filename_base
+            figname_detail = args.out_plot_dir + '/%s_details.jpg' % filename_base
+            h5name = args.out_data_dir + '/%s.h5' % filename_base
             
-    except:
-        traceback.print_exc()
+            # plot each lake and save to image
+            start_print = ''
+            try:
+                fig = lake.plot_lake(closefig=True)
+                if fig is not None: 
+                    fig.savefig(figname, dpi=150, bbox_inches='tight', pad_inches=0)
+                    print('quicklook plot, %s' % get_size(figname), end='')
+                    start_print = ' | '
+            except:
+                print('Could not make QUICKLOOK figure for lake <%s>' % lake.lake_id)
+                traceback.print_exc()
+    
+            # plot details for each lake and save to image
+            try:
+                fig = lake.plot_lake_detail(closefig=True)
+                if fig is not None: 
+                    fig.savefig(figname_detail, dpi=80, bbox_inches='tight', pad_inches=0)
+                    print('%sdetail plot, %s' % (start_print,get_size(figname_detail)), end='')
+                    start_print = ' | '
+            except:
+                print('detail_plotting_error:')
+                print('Could not make DETAIL figure for lake <%s>' % lake.lake_id)
+                traceback.print_exc()
+            
+            # export each lake to h5 and pickle
+            try:
+                datafile = lake.write_to_hdf5(h5name)
+                print('%sh5 data file, %s' % (start_print, get_size(datafile)))
+                start_print = ' | '
+                print('       %s' % datafile)
+            except:
+                print('Could not write hdf5 file <%s>' % lake.lake_id)
+                traceback.print_exc()
+    
+            # only keep files where it was possible to both write the figure and the data file
+            if os.path.isfile(figname) and (not os.path.isfile(h5name)):
+                os.remove(figname)
+            if os.path.isfile(figname_detail) and (not os.path.isfile(h5name)):
+                os.remove(figname_detail)
+            if os.path.isfile(h5name) and ((not os.path.isfile(figname)) and (not os.path.isfile(figname_detail))):
+                os.remove(h5name)
+                
+        except:
+            traceback.print_exc()
+    else:
+        print('     lake %i:  no valid depth data! (skipping...)' % (i+1))
 
 try:
     statsfname = args.out_stat_dir + '/stats_%s_%s.csv' % (args.polygon[args.polygon.rfind('/')+1:].replace('.geojson',''),
