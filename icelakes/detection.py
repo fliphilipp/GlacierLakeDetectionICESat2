@@ -2458,6 +2458,8 @@ class melt_lake:
     # -------------------------------------------------------------------------------------------
     def plot_lake_detail(self, closefig=True):
         try:
+            import matplotlib
+            
             dfp = self.photon_data
             dfd = self.depth_data
             dfm = self.mframe_data

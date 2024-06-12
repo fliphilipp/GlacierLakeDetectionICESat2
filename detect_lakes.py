@@ -169,7 +169,7 @@ for i, lake in enumerate(lake_list):
         # plot each lake and save to image
         try:
             fig = lake.plot_lake(closefig=True)
-            if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
+            if fig is not None: fig.savefig(figname, dpi=150, bbox_inches='tight', pad_inches=0)
         except:
             print('Could not make MAIN figure for lake <%s>' % lake.lake_id)
             traceback.print_exc()
@@ -177,7 +177,7 @@ for i, lake in enumerate(lake_list):
         # plot details for each lake and save to image
         try:
             fig = lake.plot_lake_detail(closefig=True)
-            if fig is not None: fig.savefig(figname_detail, dpi=300, bbox_inches='tight', pad_inches=0)
+            if fig is not None: fig.savefig(figname_detail, dpi=150, bbox_inches='tight', pad_inches=0)
         except:
             print('Could not make DETAIL figure for lake <%s>' % lake.lake_id)
             traceback.print_exc()
