@@ -2459,20 +2459,23 @@ class melt_lake:
     def plot_lake_detail(self, closefig=True):
         try:
             import matplotlib
-            
-            dfp = self.photon_data
-            dfd = self.depth_data
-            dfm = self.mframe_data
-            surf_elev = self.surface_elevation
-            max_depth = self.max_depth
-            refract_idx = 1.336
-        
             fig, axs = plt.subplots(figsize=[21,13], dpi=50, ncols=3, nrows=4, sharex=True, sharey=True)
             axs = axs.flatten()
             sz_scatt = 15
             inset_loc = [0.01, 0.04, 0.02, 0.4]
             inset_sz = 8
             textbox = dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.2,rounding_size=0.5', edgecolor='none')
+            refract_idx = 1.336
+
+            dfp = self.photon_data
+            dfm = self.mframe_data
+            surf_elev = self.surface_elevation if 'surface_elevation' in vars(self).keys() else self.main_peak
+            max_depth = self.max_depth if 'max_depth' in vars(self).keys() else 0.0
+
+            try:
+                dfd = self.depth_data
+            except:
+                print('this lake has no depth data')
         
             maxd_rng = np.max((max_depth, 2.0))
             yl = (surf_elev-2*maxd_rng*refract_idx, surf_elev+maxd_rng*refract_idx)
@@ -2495,7 +2498,7 @@ class melt_lake:
                 txt += 'date_time = %s UTC\n' % self.date_time
                 txt += 'lat_str = %s, lon_str = %s\n' % (self.lat_str, self.lon_str)
                 txt += 'bbox = [%.5f, %.5f, %.5f, %.5f]\n' % (self.lon_min, self.lat_min, self.lon_max, self.lat_max)
-                txt += 'surface_elevation = %.1f m, max_depth = %.1f m\n' % (self.surface_elevation, self.max_depth)
+                txt += 'surface_elevation = %.1f m, max_depth = %.1f m\n' % (surf_elev, max_depth)
                 txt += 'depth_quality_sort = %.3f' % (self.depth_quality_sort)
                 
                 ax.text(0.5, 0.5, txt, transform=ax.transAxes, va='center', ha='center', fontsize=12)
@@ -2503,6 +2506,8 @@ class melt_lake:
                 ax.text(0.5, 0.01, txt2, transform=ax.transAxes, va='bottom', ha='center', fontsize=9)
                 ax.axis('off')
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2512,10 +2517,21 @@ class melt_lake:
                 ax.text(0.5, 0.9, 'raw ATL03 data', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
                 ax.scatter(dfp.xatc, dfp.h, s=sz_scatt, color='k', edgecolors='none')
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
             # FITTED SURFACE / LAKEBED
+            try:
+                h0 = surf_elev
+                def h2d(h):
+                    return (h0 - h) / refract_idx
+                def d2h(d):
+                    return h0 - d * refract_idx 
+            except:
+                traceback.print_exc()
+                
             ax = axs[2]
             conf_thresh = 0.3
             try:
@@ -2533,11 +2549,6 @@ class melt_lake:
                 hfitbed[dfd.conf <= conf_thresh] = np.nan
                 hfitbed[dfd.h_fit_bed > (surf_elev-0.1)] = np.nan
                 p_bed2, = ax.plot(dfd.xatc, hfitbed, color='r', lw=3, label='lakebed conf > %g'%conf_thresh)
-                h0 = self.surface_elevation
-                def h2d(h):
-                    return (h0 - h) / refract_idx
-                def d2h(d):
-                    return h0 - d * refract_idx 
                 ylm = yl
                 dax = ax.twinx()
                 dax.set_ylim([h2d(ylm[0]), h2d(ylm[1])])
@@ -2548,6 +2559,8 @@ class melt_lake:
                         fontweight='bold', color='r')
                 leg1 = ax.legend(handles=[p_surf, p_bed, p_bed2], loc='lower right',fontsize=8)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2561,6 +2574,8 @@ class melt_lake:
                 cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
                 cax.tick_params(axis='both', which='major', labelsize=inset_sz)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2573,6 +2588,7 @@ class melt_lake:
                         cmap(np.linspace(minval, maxval, n)))
                     return new_cmap
             except:
+                print('detail_plotting_error:')
                 traceback.print_exc()
             
             ax = axs[4]
@@ -2585,6 +2601,8 @@ class melt_lake:
                 cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
                 cax.tick_params(axis='both', which='major', labelsize=inset_sz)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2599,6 +2617,8 @@ class melt_lake:
                 cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
                 cax.tick_params(axis='both', which='major', labelsize=inset_sz)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
             
             ##############################################################
@@ -2618,6 +2638,8 @@ class melt_lake:
                 ax.plot([xl[1]]*2, [h0, h0-refract_idx*max_depth], 'r-', lw=3)
                 daxs.append(dax)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2635,6 +2657,8 @@ class melt_lake:
                 cax.tick_params(axis='both', which='major', labelsize=inset_sz)
                 leg1 = ax.legend(handles=[scatt_h], loc='lower right',fontsize=10)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2648,6 +2672,8 @@ class melt_lake:
                 cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
                 cax.tick_params(axis='both', which='major', labelsize=inset_sz)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2672,8 +2698,14 @@ class melt_lake:
                     hdl = ax.fill_between([bounds[i], bounds[i+1]], ylm[0], ylm[1], facecolor="none", hatch=thishatch, edgecolor=thiscol, 
                                                 linewidth=1, alpha=0.3, label=label, zorder=-100)
                     hdls[j] = hdl
+                hdls[0] = ax.fill_between([-9999, -9998], [-9999, -9998] , facecolor="none", hatch='/////', edgecolor='g', 
+                                linewidth=1, alpha=0.3, label='pass', zorder=-100)
+                hdls[1] = ax.fill_between([-9999, -9998], [-9999, -9998] , facecolor="none", hatch='XXXXX', edgecolor='r', 
+                                linewidth=1, alpha=0.3, label='fail', zorder=-100)
                 leg1 = ax.legend(handles=hdls, loc='lower left',fontsize=10)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2698,8 +2730,14 @@ class melt_lake:
                     hdl = ax.fill_between([bounds[i], bounds[i+1]], ylm[0], ylm[1], facecolor="none", hatch=thishatch, edgecolor=thiscol, 
                                                 linewidth=1, alpha=0.3, label=label, zorder=-100)
                     hdls[j] = hdl
+                hdls[0] = ax.fill_between([-9999, -9998], [-9999, -9998] , facecolor="none", hatch='/////', edgecolor='g', 
+                                linewidth=1, alpha=0.3, label='pass', zorder=-100)
+                hdls[1] = ax.fill_between([-9999, -9998], [-9999, -9998] , facecolor="none", hatch='XXXXX', edgecolor='r', 
+                                linewidth=1, alpha=0.3, label='fail', zorder=-100)
                 leg1 = ax.legend(handles=hdls, loc='lower left',fontsize=10)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             ##############################################################
@@ -2715,6 +2753,8 @@ class melt_lake:
                 prom20 = ax.scatter(-9999, -9999, s=0.2*50, edgecolors='b', facecolors='none', linewidth=1, label='prominence = 0.2')
                 leg1 = ax.legend(handles=[prom100, prom50, prom20], loc='lower left',fontsize=10)
             except:
+                print('detail_plotting_error:')
+                ax.text(0.5, 0.5, 'no data / plotting error', transform=ax.transAxes, va='center', ha='center', fontsize=14)
                 traceback.print_exc()
         
             try:
@@ -2756,6 +2796,7 @@ class melt_lake:
                         ax3.xaxis.set_tick_params(labelsize=8)
                         ax3.ticklabel_format(useOffset=False, style='plain')
             except:
+                print('detail_plotting_error:')
                 traceback.print_exc()
             
             ax.set_ylim(yl)
@@ -2769,6 +2810,7 @@ class melt_lake:
                     dax.set_ylim([h2d(yl[0]), h2d(yl[1])])
                     dax.text(0.99, 0.66, 'water depth (m)', rotation=-90, color='r', fontweight='bold', va='top', ha='right', transform=dax.transAxes, bbox=textbox)
             except:
+                print('detail_plotting_error:')
                 traceback.print_exc()
                 
             fig.tight_layout(w_pad=0.2, h_pad=0.2, pad=0.3)
@@ -2778,6 +2820,7 @@ class melt_lake:
             return fig
     
         except:
+            print('detail_plotting_error:')
             traceback.print_exc()
 
     # -------------------------------------------------------------------------------------------

@@ -1,0 +1,32 @@
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err:Traceback (most recent call last):
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err-  File "detect_lakes.py", line 73, in <module>
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err-    spatial_sub=True
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err-  File "/srv/icelakes/nsidc.py", line 428, in download_granule
+
+
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err:Traceback (most recent call last):
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err-  File "detect_lakes.py", line 145, in <module>
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err-    lake.surrf()
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230816052903_08712004_006_02.h5-771.err-  File "/srv/icelakes/detection.py", line 1958, in surrf
+
+
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err:Traceback (most recent call last):
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err-  File "/srv/icelakes/detection.py", line 2464, in plot_lake_detail
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err-    dfd = self.depth_data
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err-AttributeError: 'melt_lake' object has no attribute 'depth_data'
+
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err:Traceback (most recent call last):
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err-  File "detect_lakes.py", line 187, in <module>
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err-    datafile = lake.write_to_hdf5(h5name)
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815055442_08562004_006_02.h5-766.err-  File "/srv/icelakes/detection.py", line 2788, in write_to_hdf5
+
+
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err:Traceback (most recent call last):
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err-  File "/opt/conda/lib/python3.7/site-packages/urllib3/connectionpool.py", line 710, in urlopen
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err-    chunked=chunked,
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err-  File "/opt/conda/lib/python3.7/site-packages/urllib3/connectionpool.py", line 449, in _make_request
+--
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err:Traceback (most recent call last):
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err-  File "/opt/conda/lib/python3.7/site-packages/requests/adapters.py", line 499, in send
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err-    timeout=timeout,
+errs/job_GrIS_2023_2000_NO-15177167_ATL03_20230815042025_08552004_006_02.h5-764.err-  File "/opt/conda/lib/python3.7/site-packages/urllib3/connectionpool.py", line 788, in urlopen
