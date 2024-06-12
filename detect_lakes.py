@@ -17,7 +17,11 @@
 # $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_SW.geojson
 # $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_CW.geojson
 
+# for detail plot legend fix
 # python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/teslake_gris_bounding_box.geojson
+
+# for lake without depth data (surrf error / no detection extent)
+# python3 detect_lakes.py --granule ATL03_20230815055442_08562004_006_02.h5 --polygon geojsons/simplified_GRE_2000_NO.geojson
 
 import argparse
 import os
@@ -162,7 +166,7 @@ for i, lake in enumerate(lake_list):
         filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.depth_quality_sort,0,None)*100)),
                                                      lake.ice_sheet, lake.melt_season, 
                                                      lake.lake_id)
-        figname = args.out_plot_dir + '/%s.jpg' % filename_base
+        figname = args.out_plot_dir + '/%s_quicklook.jpg' % filename_base
         figname_detail = args.out_plot_dir + '/%s_details.jpg' % filename_base
         h5name = args.out_data_dir + '/%s.h5' % filename_base
         
