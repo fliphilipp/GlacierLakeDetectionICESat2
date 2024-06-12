@@ -60,7 +60,7 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
 # download the specified ICESat-2 data from NSIDC
 try_nr = 1
 request_status_code = 0
-while (request_status_code != 200) & (try_nr <= 50):
+while (request_status_code != 200) & (try_nr <= 100):
     try:
         print('Downloading granule from NSIDC. (try %i)' % try_nr)
         input_filename, request_status_code = download_granule(
@@ -74,13 +74,13 @@ while (request_status_code != 200) & (try_nr <= 50):
         )
         if request_status_code != 200:
             print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
-            time.sleep(60)
+            time.sleep(np.random.randint(low=60, high=600))
             try_nr += 1
         
     except:
         print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
         traceback.print_exc()
-        time.sleep(60)
+        time.sleep(np.random.randint(low=60, high=600))
         try_nr += 1
 
 # perform a bunch of checks to make sure everything went alright with the nsidc api
@@ -177,8 +177,10 @@ for i, lake in enumerate(lake_list):
         # plot details for each lake and save to image
         try:
             fig = lake.plot_lake_detail(closefig=True)
-            if fig is not None: fig.savefig(figname_detail, dpi=150, bbox_inches='tight', pad_inches=0)
+            if fig is not None: 
+                fig.savefig(figname_detail, dpi=100, bbox_inches='tight', pad_inches=0)
         except:
+            print('detail_plotting_error:')
             print('Could not make DETAIL figure for lake <%s>' % lake.lake_id)
             traceback.print_exc()
         
