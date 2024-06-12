@@ -1,6 +1,8 @@
 import os
 import math
-import datetime
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 import h5py
 
 ##########################################################################################
@@ -14,9 +16,19 @@ def get_size(filename):
         return "%s %s" % (s, size_name[i])
 
 ##########################################################################################
-def convert_time_to_string(dt):
-    epoch = dt + datetime.datetime.timestamp(datetime.datetime(2018,1,1))
-    return datetime.datetime.fromtimestamp(epoch).strftime("%Y-%m-%d, %H:%M:%S")
+# def convert_time_to_string(dt):
+#     epoch = dt + datetime.datetime.timestamp(datetime.datetime(2018,1,1))
+#     return datetime.datetime.fromtimestamp(epoch).strftime("%Y-%m-%d, %H:%M:%S")
+
+def convert_time_to_string(lake_mean_delta_time): # fixed to match UTC timezone
+    # ATLAS SDP epoch is 2018-01-01:T00.00.00.000000 UTC, from ATL03 data dictionary 
+    ATLAS_SDP_epoch_datetime = datetime(2018, 1, 1, tzinfo=timezone.utc)
+    ATLAS_SDP_epoch_timestamp = datetime.timestamp(ATLAS_SDP_epoch_datetime)
+    lake_mean_timestamp = ATLAS_SDP_epoch_timestamp + lake_mean_delta_time
+    lake_mean_datetime = datetime.fromtimestamp(lake_mean_timestamp, tz=timezone.utc)
+    time_format_out = '%Y-%m-%dT%H:%M:%SZ'
+    is2time = datetime.strftime(lake_mean_datetime, time_format_out)
+    return is2time
 
     
 ##########################################################################################

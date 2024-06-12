@@ -17,6 +17,8 @@
 # $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_SW.geojson
 # $ python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2000_CW.geojson
 
+# python3 detect_lakes.py --granule ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/teslake_gris_bounding_box.geojson
+
 import argparse
 import os
 import gc
@@ -141,12 +143,14 @@ print('---> determining depth for each lake')
 for i, lake in enumerate(lake_list):
     try: 
         lake.surrf()
-        print('   --> %3i/%3i, %s | %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (i+1, len(lake_list), lake.gtx, lake.lat, 
-                                                                                 lake.lon, lake.max_depth, lake.lake_quality))
+        lake.get_sorting_quality()
+        print('     --> %3i/%3i, %s | %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (i+1, len(lake_list), lake.gtx, lake.lat, 
+                                                                                 lake.lon, lake.max_depth, lake.depth_quality_sort))
     except:
         print('Error for lake %i (detection quality = %.5f) ... skipping:' % (i+1, lake.detection_quality))
         traceback.print_exc()
         lake.lake_quality = 0.0
+        lake.depth_quality_sort = 0.0
 
 # remove zero quality lakes
 # lake_list[:] = [lake for lake in lake_list if lake.lake_quality > 0]
@@ -155,12 +159,11 @@ for i, lake in enumerate(lake_list):
 for i, lake in enumerate(lake_list):
     try:
         lake.lake_id = '%s_%s_%s_%04i' % (lake.polygon_name, lake.granule_id[:-3], lake.gtx, i)
-        if np.isnan(lake.quality_sort):
-            lake.quality_sort = 0.0
-        filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.quality_sort,0,None)*100)),
+        filename_base = 'lake_%06i_%s_%s_%s' % (int(np.round(np.clip(1000-lake.depth_quality_sort,0,None)*100)),
                                                      lake.ice_sheet, lake.melt_season, 
                                                      lake.lake_id)
         figname = args.out_plot_dir + '/%s.jpg' % filename_base
+        figname_detail = args.out_plot_dir + '/%s_details.jpg' % filename_base
         h5name = args.out_data_dir + '/%s.h5' % filename_base
         
         # plot each lake and save to image
@@ -168,7 +171,15 @@ for i, lake in enumerate(lake_list):
             fig = lake.plot_lake(closefig=True)
             if fig is not None: fig.savefig(figname, dpi=300, bbox_inches='tight', pad_inches=0)
         except:
-            print('Could not make figure for lake <%s>' % lake.lake_id)
+            print('Could not make MAIN figure for lake <%s>' % lake.lake_id)
+            traceback.print_exc()
+
+        # plot details for each lake and save to image
+        try:
+            fig = lake.plot_lake_detail(closefig=True)
+            if fig is not None: fig.savefig(figname_detail, dpi=300, bbox_inches='tight', pad_inches=0)
+        except:
+            print('Could not make DETAIL figure for lake <%s>' % lake.lake_id)
             traceback.print_exc()
         
         # export each lake to h5 and pickle
@@ -182,7 +193,9 @@ for i, lake in enumerate(lake_list):
         # only keep files where it was possible to both write the figure and the data file
         if os.path.isfile(figname) and (not os.path.isfile(h5name)):
             os.remove(figname)
-        if os.path.isfile(h5name) and (not os.path.isfile(figname)):
+        if os.path.isfile(figname_detail) and (not os.path.isfile(h5name)):
+            os.remove(figname_detail)
+        if os.path.isfile(h5name) and ((not os.path.isfile(figname)) and (not os.path.isfile(figname_detail))):
             os.remove(h5name)
             
     except:

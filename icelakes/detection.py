@@ -2124,16 +2124,100 @@ class melt_lake:
         evaldf = evaldf[~evaldf.lat.isna()]
         evaldf = evaldf[~evaldf.lon.isna()]
 
-        self.photon_data['prob_surf'] = df.prob_surf
-        self.photon_data['prob_bed'] = df.prob_bed
-        self.photon_data['is_signal'] = df.is_signal
-        self.photon_data['is_afterpulse'] = df.is_afterpulse
+        # self.photon_data['prob_surf'] = df.prob_surf
+        # self.photon_data['prob_bed'] = df.prob_bed
+        # self.photon_data['is_signal'] = df.is_signal
+        # self.photon_data['is_afterpulse'] = df.is_afterpulse
+        hfitsurf_all = evaldf.h_fit_surf.copy()
+        prob_adjust_elev = 1 - np.interp(df.xatc, evaldf.xatc, np.clip((np.abs(hfitsurf_all-surf_elev)-0.03)/0.2, 0, 1))
+        leftx = df.xatc - evaldf[evaldf.depth > 0].xatc.min()
+        rightx = evaldf[evaldf.depth > 0].xatc.max() - df.xatc
+        prob_adjust_sides = np.clip(np.min(np.vstack((leftx, rightx)), axis=0)/50, 0, 1)
+        prob_adjust = prob_adjust_elev * prob_adjust_sides
+        df.prob_surf *= prob_adjust
+        df.prob_bed *= prob_adjust
+
+        hfitsurf_all = evaldf.h_fit_surf.copy()
+        prob_adjust_elev = 1 - np.clip((np.abs(hfitsurf_all-surf_elev)-0.03)/0.2, 0, 1)
+        prob_adjust_elev[evaldf.depth <= 0] = 1.0
+        evaldf.conf *= prob_adjust_elev
+        
+        self.photon_data = df[list(set(list(self.photon_data.keys()) + ['prob_surf', 'prob_bed', 'is_signal', 'is_afterpulse'
+                                                                       ]))].sort_values(by='xatc').reset_index(drop=True)
         self.depth_data = evaldf[['xatc', 'lat', 'lon', 'depth', 'conf', 'h_fit_surf', 'h_fit_bed', 'std_surf', 'std_bed']].copy()
         self.surface_elevation = surf_elev
         self.lake_quality = depth_quality
         depth_quality_sort = 0.0 if np.isnan(depth_quality_sort) else depth_quality_sort
         self.quality_sort = depth_quality_sort
-        self.max_depth = evaldf.depth[evaldf.conf>0.0].max()
+        hqdepth = evaldf.depth[(evaldf.conf>0.3) & (np.abs(evaldf.h_fit_surf - surf_elev) < 0.25) & (evaldf.depth >= 0.0)]
+        self.max_depth = hqdepth.max() if len(hqdepth) > 0 else 0.0
+
+    #-------------------------------------------------------------------------------------
+    def get_sorting_quality(self, final_resolution=5, conf_thresh=0.1, min_frac_goodqual=0.1, min_phot_goodqual=15, nbins=300,
+                            nweight_width=3, saddle_percentile=33, min_slope_ratio=15, min_surf_elev=3):
+    
+        try:
+            dfd = self.depth_data
+            dfp = self.photon_data
+            surf_elev = self.surface_elevation
+            maxd = self.max_depth
+            dfp['is_afterpulse'] = dfp.prob_afterpulse>np.random.uniform(0,1,len(dfp))
+            df_nnz = dfp[~dfp.is_afterpulse]
+            df_bed = dfd[(dfd.h_fit_bed < surf_elev) & (dfd.h_fit_bed < dfd.h_fit_surf) 
+                        & (dfd.h_fit_surf < (surf_elev+0.25)) & (dfd.h_fit_surf > (surf_elev-0.25)) & (dfd.depth != 0)]
+            select_qual = df_bed.conf >= conf_thresh
+            frac_goodquality = np.mean(select_qual)
+            if (frac_goodquality >= min_frac_goodqual) & (np.sum(select_qual)>=min_phot_goodqual):
+                counts = np.zeros((len(df_bed), nbins))
+                for i in range(len(df_bed)):
+                    vals = df_bed.iloc[i]
+                    in_xatc = (df_nnz.xatc > (vals.xatc-final_resolution/2)) & (df_nnz.xatc < (vals.xatc+final_resolution/2))
+                    thisdf = df_nnz[in_xatc]
+                    hrng = vals.h_fit_surf - vals.h_fit_bed
+                    bins = np.linspace(vals.h_fit_bed-hrng, vals.h_fit_surf+hrng, nbins+1)
+                    hrng = surf_elev - vals.h_fit_bed
+                    bins = np.linspace(vals.h_fit_bed-hrng, surf_elev+hrng, nbins+1)
+                    hist = np.histogram(thisdf.h, bins=bins)[0]
+                    counts[i,:] = hist
+            
+                scaled_hist = np.sum(counts, axis=0)
+                scaled_smooth = pd.Series(scaled_hist).rolling(window=int(nbins/3), win_type='gaussian', min_periods=1, center=True).mean(std=nbins/100)
+                df_dens_all = pd.DataFrame({'x': np.linspace(-1,2,nbins), 'n': scaled_smooth})
+                n_bedpeak = np.nanmean(df_dens_all.n[np.abs(df_dens_all.x) < 0.1])
+                nweight = (np.sin((np.clip(n_bedpeak / nweight_width, 0, 1) - 0.5) * np.pi) + 1) / 2
+                
+                df_dens_int = df_dens_all[(df_dens_all.x > 0) & (df_dens_all.x < 1)].copy()
+                n_saddle = np.mean(df_dens_int.n[df_dens_int.n < np.percentile(df_dens_int.n, saddle_percentile)])
+                if n_saddle == 0:
+                    n_saddle += 1e-10
+                depth_quality = np.clip(n_bedpeak / n_saddle - 2, 0, None)
+                
+                coef = np.polyfit(df_bed.xatc, df_bed.h_fit_surf, 1)
+                poly1d_f = np.poly1d(coef)
+                xminmax = [df_bed.xatc.min(), df_bed.xatc.max()]
+                hminmax = poly1d_f(xminmax)
+                hminmax1 = np.abs(np.diff(hminmax)[0])
+                hminmax2 = np.std(df_bed.h_fit_surf)
+                maxd5 = np.max(dfd.depth[dfd.conf >= 0.3])
+                hrange = np.max((hminmax1, hminmax2))
+                slope_ratio = maxd5 / hrange
+                slope_adjust = np.clip(slope_ratio / min_slope_ratio, 0, 1)
+                
+                depth_quality_sort = np.clip(n_bedpeak / n_saddle, 0, None) * frac_goodquality * nweight * slope_adjust
+                if surf_elev < min_surf_elev:
+                    depth_quality_sort = 0.0
+                if np.isnan(depth_quality_sort):
+                    depth_quality_sort = 0.0
+        
+            else:
+                depth_quality_sort = 0.0
+                
+            self.depth_quality_sort = depth_quality_sort
+            
+        except:
+            traceback.print_exc()
+            depth_quality_sort = 0.0
+            self.depth_quality_sort = depth_quality_sort
    
     #-------------------------------------------------------------------------------------
     def plot_lake(self, fig_dir='figs', verbose=False, print_mframe_info=True, closefig=True):
@@ -2185,7 +2269,8 @@ class melt_lake:
         try:
             ax2 = ax.twinx()
             p_water_depth = ax2.scatter(dfd.xatc, dfd.depth, s=3, c=[(1, 1-x, 1-x) for x in dfd.conf], label='water depth')
-            yl1 = np.array([surf_elev - 1.5*1.336*dfd.depth.max(), surf_elev + 1.336*dfd.depth.max()])
+            maxd_plot = np.max((self.max_depth, 2.0))
+            yl1 = np.array([surf_elev - 1.5*1.336*maxd_plot, surf_elev + 1.336*maxd_plot])
             ylms = yl1
             yl2 = yl1 - surf_elev
         except:
@@ -2348,7 +2433,7 @@ class melt_lake:
 
         # add detection quality description
         try:
-            txt  = 'LAKE QUALITY: %6.2f'%self.lake_quality
+            txt  = 'LAKE QUALITY: %7.2f'%self.depth_quality_sort
             bbox = {'fc':(1,1,1,0.75), 'ec':(1,1,1,0), 'pad':1}
             ax.text(0.99, 0.02, txt, transform=ax.transAxes, ha='right', va='bottom',fontsize=10, weight='bold', bbox=bbox)
         except:
@@ -2368,6 +2453,330 @@ class melt_lake:
         if closefig: 
                 plt.close(fig)
         return fig
+
+        
+    # -------------------------------------------------------------------------------------------
+    def plot_lake_detail(self, closefig=True):
+        try:
+            dfp = self.photon_data
+            dfd = self.depth_data
+            dfm = self.mframe_data
+            surf_elev = self.surface_elevation
+            max_depth = self.max_depth
+            refract_idx = 1.336
+        
+            fig, axs = plt.subplots(figsize=[21,13], dpi=50, ncols=3, nrows=4, sharex=True, sharey=True)
+            axs = axs.flatten()
+            sz_scatt = 15
+            inset_loc = [0.01, 0.04, 0.02, 0.4]
+            inset_sz = 8
+            textbox = dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.2,rounding_size=0.5', edgecolor='none')
+        
+            maxd_rng = np.max((max_depth, 2.0))
+            yl = (surf_elev-2*maxd_rng*refract_idx, surf_elev+maxd_rng*refract_idx)
+            xl = (0, dfp.xatc.max())
+            daxs = []
+        
+            ##############################################################
+            # INFO TEXT
+            ax = axs[1]
+            ax.set_xlim(xl)
+            ax.set_ylim(yl)
+            try:
+                txt0 = 'ICESat-2 lake data:'
+                ax.text(0.5, 0.98, txt0, transform=ax.transAxes, va='top', ha='center', fontsize=15)
+                txt = 'granule_id = %s\n' % self.granule_id
+                txt += 'cycle_number = %s, rgt = %s, gtx = %s, sc_orient = %s\n' % (self.cycle_number, self.rgt, self.gtx, self.sc_orient)
+                txt += 'beam_number = %s, beam_strength = %s\n' % (self.beam_number, self.beam_strength)
+                txt += 'ice_sheet = %s, melt_season = %s\n' % (self.ice_sheet, self.melt_season)
+                txt += 'polygon_filename = %s\n' % self.polygon_filename
+                txt += 'date_time = %s UTC\n' % self.date_time
+                txt += 'lat_str = %s, lon_str = %s\n' % (self.lat_str, self.lon_str)
+                txt += 'bbox = [%.5f, %.5f, %.5f, %.5f]\n' % (self.lon_min, self.lat_min, self.lon_max, self.lat_max)
+                txt += 'surface_elevation = %.1f m, max_depth = %.1f m\n' % (self.surface_elevation, self.max_depth)
+                txt += 'depth_quality_sort = %.3f' % (self.depth_quality_sort)
+                
+                ax.text(0.5, 0.5, txt, transform=ax.transAxes, va='center', ha='center', fontsize=12)
+                txt2 = 'lake_id = %s\n' % self.lake_id
+                ax.text(0.5, 0.01, txt2, transform=ax.transAxes, va='bottom', ha='center', fontsize=9)
+                ax.axis('off')
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # RAW ATL03
+            ax = axs[0]
+            try:
+                ax.text(0.5, 0.9, 'raw ATL03 data', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                ax.scatter(dfp.xatc, dfp.h, s=sz_scatt, color='k', edgecolors='none')
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # FITTED SURFACE / LAKEBED
+            ax = axs[2]
+            conf_thresh = 0.3
+            try:
+                ax.text(0.5, 0.9, 'fitted surface / lakebed', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfp_plot = dfp.copy()
+                dfp_plot = dfp_plot[~dfp_plot.is_afterpulse]
+                ax.scatter(dfp_plot.xatc, dfp_plot.h, s=sz_scatt, color='gray', edgecolors='none')
+                # ax.scatter(dfp.xatc[dfp.is_afterpulse], dfp.h[dfp.is_afterpulse], s=sz_scatt*4, color='g')
+                hfitsurf = dfd.h_fit_surf.copy()
+                hfitsurf[dfd.depth <= 0] = np.nan
+                p_surf, = ax.plot(dfd.xatc, hfitsurf, color='C0', lw=3, label='surface')
+                hfitbed = dfd.h_fit_bed.copy()
+                hfitbed[dfd.depth <= 0] = np.nan
+                p_bed, = ax.plot(dfd.xatc, hfitbed, color='r', lw=1, ls='--', label='lakebed fit')
+                hfitbed[dfd.conf <= conf_thresh] = np.nan
+                hfitbed[dfd.h_fit_bed > (surf_elev-0.1)] = np.nan
+                p_bed2, = ax.plot(dfd.xatc, hfitbed, color='r', lw=3, label='lakebed conf > %g'%conf_thresh)
+                h0 = self.surface_elevation
+                def h2d(h):
+                    return (h0 - h) / refract_idx
+                def d2h(d):
+                    return h0 - d * refract_idx 
+                ylm = yl
+                dax = ax.twinx()
+                dax.set_ylim([h2d(ylm[0]), h2d(ylm[1])])
+                xl = ax.get_xlim()
+                ax.plot([xl[1]]*2, [h0, h0-refract_idx*max_depth], 'r-', lw=3)
+                daxs.append(dax)
+                ax.text(0.03, 0.04, 'lake quality: %.2f' % self.depth_quality_sort, transform=ax.transAxes, va='bottom', ha='left', fontsize=17, bbox=textbox,
+                        fontweight='bold', color='r')
+                leg1 = ax.legend(handles=[p_surf, p_bed, p_bed2], loc='lower right',fontsize=8)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # PHOTON SIGNAL CONFIDENCE / SNR
+            ax = axs[3]
+            try:
+                ax.text(0.5, 0.9, 'photon signal confidence', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfp_plot = dfp.copy().sort_values(by='snr').reset_index(drop=True)
+                scatt = ax.scatter(dfp_plot.xatc, dfp_plot.h, s=sz_scatt, c=dfp_plot.snr, cmap=cmc.lajolla, edgecolors='none',vmin=0,vmax=1)
+                cax = ax.inset_axes(inset_loc)
+                cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
+                cax.tick_params(axis='both', which='major', labelsize=inset_sz)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # BED PROBABILITY
+            try:
+                import matplotlib.colors as colors
+                def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+                    new_cmap = colors.LinearSegmentedColormap.from_list(
+                        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
+                        cmap(np.linspace(minval, maxval, n)))
+                    return new_cmap
+            except:
+                traceback.print_exc()
+            
+            ax = axs[4]
+            try:
+                ax.text(0.5, 0.9, 'lakebed probability', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfp_plot = dfp.copy().sort_values(by='prob_bed').reset_index(drop=True)
+                thiscmap = truncate_colormap(cmc.vik, minval=0.5, maxval=1.0)
+                scatt = ax.scatter(dfp_plot.xatc, dfp_plot.h, s=sz_scatt, c=dfp_plot.prob_bed, edgecolors='none', cmap=thiscmap, vmin=0, vmax=1)
+                cax = ax.inset_axes(inset_loc)
+                cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
+                cax.tick_params(axis='both', which='major', labelsize=inset_sz)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # SURFACE PROBABILITY
+            ax = axs[7]
+            try:
+                ax.text(0.5, 0.9, 'surface probability', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfp_plot = dfp.copy().sort_values(by='prob_surf').reset_index(drop=True)
+                thiscmap = truncate_colormap(cmc.vik_r, minval=0.5, maxval=1.0)
+                scatt = ax.scatter(dfp_plot.xatc, dfp_plot.h, s=sz_scatt, c=dfp_plot.prob_surf, edgecolors='none', cmap=thiscmap, vmin=0, vmax=1)
+                cax = ax.inset_axes(inset_loc)
+                cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
+                cax.tick_params(axis='both', which='major', labelsize=inset_sz)
+            except:
+                traceback.print_exc()
+            
+            ##############################################################
+            # BATHYMETRY CONFIDENCE
+            ax = axs[5]
+            try:
+                ax.text(0.5, 0.9, 'bathymetry confidence', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dax = ax.twinx()
+                dax.set_ylim([h2d(ylm[0]), h2d(ylm[1])])
+                xl = ax.get_xlim()
+                dax.plot(xl, [0]*2, 'k--')
+                scatt = dax.scatter(dfd.xatc, dfd.depth, s=1+dfd.conf*50, c=dfd.conf, edgecolors='none', cmap=cmc.batlowW_r, vmin=0, vmax=1)
+                cax = ax.inset_axes(inset_loc)
+                cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
+                cax.tick_params(axis='both', which='major', labelsize=inset_sz)
+                xl = ax.get_xlim()
+                ax.plot([xl[1]]*2, [h0, h0-refract_idx*max_depth], 'r-', lw=3)
+                daxs.append(dax)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # PULSE SATURATION
+            ax = axs[10]
+            try:
+                ax.text(0.5, 0.9, 'pulse saturation', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfp_plot = dfp.copy().sort_values(by='sat_ratio').reset_index(drop=True)
+                scatt = ax.scatter(dfp_plot.xatc, dfp_plot.h, s=sz_scatt, c=dfp_plot.sat_ratio, cmap=cmc.nuuk_r, edgecolors='none',vmin=0,vmax=5)
+                dfp_plot.loc[(dfp_plot.sat_elev==0) | (dfp_plot.sat_ratio<1), 'sat_elev'] = np.nan
+                h_sat = dfp_plot.groupby(['mframe', 'ph_id_pulse'])[['xatc', 'sat_elev']].mean()
+                scatt_h = ax.scatter(h_sat.xatc, h_sat.sat_elev, s=sz_scatt/3, color='r', edgecolors='none', label='saturated surface returns')
+                cax = ax.inset_axes(inset_loc)
+                cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
+                cax.tick_params(axis='both', which='major', labelsize=inset_sz)
+                leg1 = ax.legend(handles=[scatt_h], loc='lower right',fontsize=10)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # AFTERPULSE PROBABILITY
+            ax = axs[11]
+            try:
+                ax.text(0.5, 0.9, 'afterpulse probability', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfp_plot = dfp.copy().sort_values(by='prob_afterpulse').reset_index(drop=True)
+                scatt = ax.scatter(dfp_plot.xatc, dfp_plot.h, s=sz_scatt, c=dfp_plot.prob_afterpulse, cmap=cmc.tokyo_r, edgecolors='none',vmin=0,vmax=1)
+                cax = ax.inset_axes(inset_loc)
+                cbar = plt.colorbar(scatt, cax=cax, orientation='vertical')
+                cax.tick_params(axis='both', which='major', labelsize=inset_sz)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # FLATNESS CHECK
+            ax = axs[6]
+            try:
+                ax.text(0.5, 0.9, 'flatness check', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                ax.scatter(dfp.xatc, dfp.h, s=sz_scatt/3, color='k', edgecolors='none')
+                lns = []
+                for i in range(len(dfm)-1):
+                    ln = (dfm.iloc[i].xatc_max + dfm.iloc[i+1].xatc_min) / 2
+                    ax.plot([ln]*2, ylm, 'k-', lw=0.7)
+                    lns.append(ln)
+                is_flat_list = list(dfm.is_flat)
+                bounds = [dfp.xatc.min()] + lns + [dfp.xatc.max()]
+                hdls = [0, 0]
+                for i, is_flat in enumerate(is_flat_list):
+                    thiscol = 'g' if is_flat else 'r'
+                    thishatch = '///' if is_flat else 'XXX'
+                    label = 'pass' if is_flat else 'fail'
+                    j = 0 if is_flat else 1
+                    hdl = ax.fill_between([bounds[i], bounds[i+1]], ylm[0], ylm[1], facecolor="none", hatch=thishatch, edgecolor=thiscol, 
+                                                linewidth=1, alpha=0.3, label=label, zorder=-100)
+                    hdls[j] = hdl
+                leg1 = ax.legend(handles=hdls, loc='lower left',fontsize=10)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # BATHYMETRY CHECK
+            ax = axs[9]
+            try:
+                ax.text(0.5, 0.9, 'bathymetry check', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                ax.scatter(dfp.xatc, dfp.h, s=sz_scatt/3, color='k', edgecolors='none')
+                lns = []
+                for i in range(len(dfm)-1):
+                    ln = (dfm.iloc[i].xatc_max + dfm.iloc[i+1].xatc_min) / 2
+                    ax.plot([ln]*2, ylm, 'k-', lw=0.7)
+                    lns.append(ln)
+                is_lake_list = list(dfm.lake_qual_pass)
+                bounds = [dfp.xatc.min()] + lns + [dfp.xatc.max()]
+                hdls = [0, 0]
+                for i, is_lake in enumerate(is_lake_list):
+                    thiscol = 'g' if is_lake else 'r'
+                    thishatch = '///' if is_lake else 'XXX'
+                    label = 'pass' if is_lake else 'fail'
+                    j = 0 if is_lake else 1
+                    hdl = ax.fill_between([bounds[i], bounds[i+1]], ylm[0], ylm[1], facecolor="none", hatch=thishatch, edgecolor=thiscol, 
+                                                linewidth=1, alpha=0.3, label=label, zorder=-100)
+                    hdls[j] = hdl
+                leg1 = ax.legend(handles=hdls, loc='lower left',fontsize=10)
+            except:
+                traceback.print_exc()
+        
+            ##############################################################
+            # BATHYMETRIC PEAKS FROM DETECTION
+            ax = axs[8]
+            try:
+                ax.text(0.5, 0.9, 'detected bathymetry peaks', transform=ax.transAxes, va='center', ha='center', fontsize=20, bbox=textbox)
+                dfb = pd.DataFrame(self.detection_2nd_returns)
+                ax.scatter(dfp.xatc, dfp.h, s=sz_scatt/3, color='gray', edgecolors='none')
+                ax.scatter(dfb.xatc, dfb.h, s=dfb.prom*180, edgecolors='b', facecolors='none', linewidth=0.5)
+                prom100 = ax.scatter(-9999, -9999, s=1*50, edgecolors='b', facecolors='none', linewidth=1, label='prominence = 1.0')
+                prom50 = ax.scatter(-9999, -9999, s=0.5*50, edgecolors='b', facecolors='none', linewidth=1, label='prominence = 0.5')
+                prom20 = ax.scatter(-9999, -9999, s=0.2*50, edgecolors='b', facecolors='none', linewidth=1, label='prominence = 0.2')
+                leg1 = ax.legend(handles=[prom100, prom50, prom20], loc='lower left',fontsize=10)
+            except:
+                traceback.print_exc()
+        
+            try:
+                dfp['x10'] = np.round(dfp.xatc, -1)
+                gt = dfp.groupby(by='x10')[['lat', 'lon']].median().sort_values(by='x10').reset_index()
+                
+                # add latitude
+                lx = gt.sort_values(by='x10').iloc[[0,-1]][['x10','lat','lon']].reset_index(drop=True)
+                _lat = np.array(lx.lat)
+                _lon = np.array(lx.lon)
+                _xatc = np.array(lx.x10)
+                def lat2xatc(l):
+                    return _xatc[0] + (l - _lat[0]) * (_xatc[1] - _xatc[0]) /(_lat[1] - _lat[0])
+                def xatc2lat(x):
+                    return _lat[0] + (x - _xatc[0]) * (_lat[1] - _lat[0]) / (_xatc[1] - _xatc[0])
+                def lon2xatc(l):
+                    return _xatc[0] + (l - _lon[0]) * (_xatc[1] - _xatc[0]) /(_lon[1] - _lon[0])
+                def xatc2lon(x):
+                    return _lon[0] + (x - _xatc[0]) * (_lon[1] - _lon[0]) / (_xatc[1] - _xatc[0])
+        
+                for i,ax in enumerate(axs):
+                    if i%3 == 0:
+                        ax.set_ylabel('elevation (m)')
+                        ax.ticklabel_format(useOffset=False, style='plain')
+                    if i >= 9:
+                        ax.set_xlabel('along-track distance (m)\n\n\n\n\n\n', labelpad=0)
+                        ax.tick_params(axis='both', which='major', pad=0)
+                        ax.ticklabel_format(useOffset=False, style='plain')
+                        ax2 = ax.secondary_xaxis(-0.15, functions=(xatc2lat, lat2xatc))
+                        ax2.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+                        ax2.set_xlabel('latitude',labelpad=0, fontsize=8)
+                        ax2.tick_params(axis='both', which='major', pad=0)
+                        ax2.xaxis.set_tick_params(labelsize=8)
+                        ax2.ticklabel_format(useOffset=False, style='plain')
+                        ax3 = ax.secondary_xaxis(-0.27, functions=(xatc2lon, lon2xatc))
+                        ax3.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
+                        ax3.set_xlabel('longitude',labelpad=0, fontsize=8)
+                        ax3.tick_params(axis='both', which='major', pad=0)
+                        ax3.xaxis.set_tick_params(labelsize=8)
+                        ax3.ticklabel_format(useOffset=False, style='plain')
+            except:
+                traceback.print_exc()
+            
+            ax.set_ylim(yl)
+    
+            try:
+                for dax in daxs:
+                    yticks = dax.get_yticks()
+                    yticks = yticks[yticks >= 0]
+                    dax.set_yticks(yticks)
+                    dax.tick_params(axis='y', colors='red')
+                    dax.set_ylim([h2d(yl[0]), h2d(yl[1])])
+                    dax.text(0.99, 0.66, 'water depth (m)', rotation=-90, color='r', fontweight='bold', va='top', ha='right', transform=dax.transAxes, bbox=textbox)
+            except:
+                traceback.print_exc()
+                
+            fig.tight_layout(w_pad=0.2, h_pad=0.2, pad=0.3)
+    
+            if closefig:
+                plt.close(fig)
+            return fig
+    
+        except:
+            traceback.print_exc()
 
     # -------------------------------------------------------------------------------------------
     def write_to_hdf5(self, filename):
@@ -2474,6 +2883,8 @@ class melt_lake:
             props.create_dataset('granule_id', data=self.granule_id)
             props.create_dataset('melt_season', data=self.melt_season)
             props.create_dataset('ice_sheet', data=self.ice_sheet)
+            props.create_dataset('depth_quality_sort', data=self.depth_quality_sort)
+            props.create_dataset('date_time', data=self.date_time)
         return filename
     
 #     #-------------------------------------------------------------------------------------

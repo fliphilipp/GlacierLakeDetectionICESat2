@@ -46,6 +46,7 @@ scp -r -i ~/.ssh/lumosKey parndt@132.239.169.168:/Users/parndt/jupyterprojects/i
 scp -i ~/.ssh/lumosKey /mnt/c/Users/phili/Documents/IceLakesMethods/sorted/baddata/* parndt@132.239.169.168:/Users/parndt/jupyterprojects/icelakes-methods/zzz_bad_data/
 
 scp -r fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/2024-06-10_testfigs_gris.tar.gz /mnt/c/Users/phili/Downloads
+scp -r fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/gld2_gris2023.tar.gz /mnt/c/Users/phili/Downloads
 
 ###################################
 # to completely clean up outputs 
