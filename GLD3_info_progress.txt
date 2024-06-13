@@ -1,0 +1,8 @@
+
+FIRST BATCH OF JOBS
+fliphilipp ID: 15209170   6/13 03:10      _      _  11304  11304 15209170.0-11303 HTCondor_submit/GLD3-GRE-0.submit
+fliphilipp ID: 15209272   6/13 03:11      _      _  17135  17135 15209272.0-17134 HTCondor_submit/GLD3-ANT1-0.submit
+fliphilipp ID: 15209273   6/13 03:12      _      _  17113  17113 15209273.0-17112 HTCondor_submit/GLD3-ANT2-0.submit
+
+<need to wait to submit HTCondor_submit/GLD3-ANT3-0.submit because: Number of submitted jobs would exceed MAX_JOBS_PER_OWNER>
+(apparently this changed to 50K ???)
