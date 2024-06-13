@@ -1,6 +1,8 @@
 import os
 import gc
 import re
+import io
+import time
 import json
 import shutil
 import zipfile
@@ -156,45 +158,8 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
 
 ##########################################################################################
 # @profile
-def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=False): 
-    """
-    Download a single ICESat-2 ATL03 granule based on its producer ID,
-    subsets it to a given geojson file, and puts it into the specified
-    output directory as a .h5 file. A NASA earthdata user id (uid), and
-    the associated password are required. 
-    (Can also provide a shapefile instead of geojson.)
-
-    Parameters
-    ----------
-    granule_id : string
-        the producer_granule_id for CMR search
-    gtxs : string or list
-        the ground tracks to request
-        possible values:
-            'gt1l' or 'gt1r' or 'gt2l', ... (single gtx)
-            ['gt1l', 'gt3r', ...] (list of gtxs)
-    geojson : string
-        filepath to the geojson file used for spatial subsetting
-    granule_output_path : string
-        folder in which to save the subsetted granule
-    uid : string
-        earthdata user id
-    pwd : string
-        the associated password
-
-    Returns
-    -------
-    nothing
-
-    Examples
-    --------
-    >>> download_granule_nsidc(granule_id='ATL03_20210715182907_03381203_005_01.h5', 
-                               geojson='geojsons/jakobshavn.geojson', 
-                               gtxs='all'
-                               granule_output_path='IS2data', 
-                               uid='myuserid', 
-                               pwd='mypasword')
-    """
+def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=True, request_mode='async'): 
+    
     print('--> parameters: granule_id = %s' % granule_id)
     print('                gtxs = %s' % gtxs)
     print('                geojson = %s' % geojson)
@@ -261,17 +226,17 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         'page_size': 100,
         'page_num': 1,
         'producer_granule_id': granule_id}
-
+    
     granules = []
     headers={'Accept': 'application/json'}
     while True:
         response = requests.get(granule_search_url, params=search_params, headers=headers)
         results = json.loads(response.content)
-
+    
         if len(results['feed']['entry']) == 0:
             # Out of results, so break out of loop
             break
-
+    
         # Collect results and increment page_num
         granules.extend(results['feed']['entry'])
         search_params['page_num'] += 1
@@ -285,29 +250,9 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     for result in granules:
         print('  '+result['producer_granule_id'], f', {float(result["granule_size"]):.2f} MB',sep='')
         
-    # Use geopandas to read in polygon file as GeoDataFrame object 
-    # Note: a shapefile, KML, or almost any other vector-based spatial data format could be substituted here.
-    gdf = gpd.read_file(geojson_filepath)
-
-    # make sure the two regions that go over the date line are adjusted 
-    # if ('West_Ep-F.geojson' in geojson_filepath) or ('East_E-Ep.geojson' in geojson_filepath): 
-    #     lon180 = np.array(gdf.geometry.iloc[0].exterior.coords.xy[0])
-    #     lon180[lon180 < 0] = lon180[lon180 < 0]  + 360
-    #     gdf['geometry'] = Polygon(list(zip(lon180, gdf.geometry.iloc[0].exterior.coords.xy[1])))
-    #     poly = orient(gdf.loc[0].geometry,sign=1.0)
-    #     lon180 = np.array(poly.exterior.coords.xy[0])
-    #     # lon180[lon180 >= 180] = lon180[lon180 >= 180] - 360
-    #     gdf['geometry'] = Polygon(list(zip(lon180, gdf.geometry.iloc[0].exterior.coords.xy[1])))
-    #     poly = gdf.loc[0].geometry
     
-    # Simplify polygon for complex shapes in order to pass a reasonable request length to CMR. 
-    # The larger the tolerance value, the more simplified the polygon.
-    # Orient counter-clockwise: CMR polygon points need to be provided in counter-clockwise order. 
-    # The last point should match the first point to close the polygon.
-    # poly = orient(gdf.simplify(0.05, preserve_topology=False).loc[0],sign=1.0)
-    # else:
+    gdf = gpd.read_file(geojson_filepath)
     poly = orient(gdf.loc[0].geometry,sign=1.0)
-
     geojson_data = gpd.GeoSeries(poly).to_json() # Convert to geojson
     geojson_data = geojson_data.replace(' ', '') #remove spaces for API call
     
@@ -321,7 +266,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     session = requests.session()
     s = session.get(capability_url)
     response = session.get(s.url,auth=(uid,pwd))
-
+    
     try:
         root = ET.fromstring(response.content)
     except:
@@ -338,7 +283,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
             return 'none', response.status_code
         except:
             return 'none', response.status_code
-
+    
     #collect lists with each service option
     subagent = [subset_agent.attrib for subset_agent in root.iter('SubsetAgent')]
     
@@ -367,7 +312,6 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         agent = ''
         subdict = subagent[0]
         if (subdict['spatialSubsettingShapefile'] == 'true') and spatial_sub:
-            ######################################## Boundingshape = geojson_data
             Boundingshape = polygon
         else:
             Boundingshape, polygon = '',''
@@ -376,9 +320,8 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         agent = 'NO'
         
     page_size = 100
-    request_mode = 'stream'
     page_num = int(np.ceil(len(granules)/page_size))
-
+    
     param_dict = {'short_name': short_name, 
                   'producer_granule_id': granule_id,
                   'version': version,  
@@ -389,21 +332,21 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                   'request_mode': request_mode, 
                   'agent': agent, 
                   'email': 'yes'}
-
+    
     #Remove blank key-value-pairs
     param_dict = {k: v for k, v in param_dict.items() if v != ''}
-
+    
     #Convert to string
     param_string = '&'.join("{!s}={!r}".format(k,v) for (k,v) in param_dict.items())
     param_string = param_string.replace("'","")
-
+    
     #Print API base URL + request parameters
     endpoint_list = [] 
     for i in range(page_num):
         page_val = i + 1
         API_request = api_request = f'{base_url}?{param_string}&page_num={page_val}'
         endpoint_list.append(API_request)
-
+    
     print('\nAPI request URL:')
     print(*endpoint_list, sep = "\n") 
     
@@ -411,28 +354,111 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     path = str(os.getcwd() + '/' + granule_output_path)
     if not os.path.exists(path):
         os.mkdir(path)
-
-    # Different access methods depending on request mode:
-    for i in range(page_num):
-        page_val = i + 1
-        print('\nOrder: ', page_val)
-        print('Requesting...')
-        request = session.get(base_url, params=param_dict)
-        print('HTTP response from order response URL: ', request.status_code)
-        # try: 
-        #     cont = str(request._content)
-        #     print(cont[cont.find('<Code>')+6:cont.find('</Code>')],
-        #       '(', cont[cont.find('<Message>')+9:cont.find('</Message>')], ')\n')
-        # except:
-        #     pass
-        request.raise_for_status()
-        d = request.headers['content-disposition']
-        fname = re.findall('filename=(.+)', d)
-        dirname = os.path.join(path,fname[0].strip('\"'))
-        print('Downloading...')
-        open(dirname, 'wb').write(request.content)
-        print('Data request', page_val, 'is complete.')
-
+    
+    # if asynchronous request
+    if request_mode=='async':
+        # Request data service for each page number, and unzip outputs
+        for i in range(page_num):
+            page_val = i + 1
+            print('Order: ', page_val)
+    
+        # For all requests other than spatial file upload, use get function
+            param_dict['page_num'] = page_val
+            request = session.get(base_url, params=param_dict)
+    
+            print('Request HTTP response: ', request.status_code)
+    
+        # Raise bad request: Loop will stop for bad response code.
+            request.raise_for_status()
+            esir_root = ET.fromstring(request.content)
+    
+        #Look up order ID
+            orderlist = []   
+            for order in esir_root.findall("./order/"):
+                orderlist.append(order.text)
+            orderID = orderlist[0]
+            print('order ID: ', orderID)
+    
+        #Create status URL
+            statusURL = base_url + '/' + orderID
+            print('status URL: ', statusURL)
+    
+        #Find order status
+            request_response = session.get(statusURL)    
+            print('HTTP response from order response URL: ', request_response.status_code)
+    
+        # Raise bad request: Loop will stop for bad response code.
+            request_response.raise_for_status()
+            request_root = ET.fromstring(request_response.content)
+            statuslist = []
+            for status in request_root.findall("./requestStatus/"):
+                statuslist.append(status.text)
+            status = statuslist[0]
+            print('Data request ', page_val, ' is submitting...')
+            print('Initial request status is ', status)
+    
+        #Continue loop while request is still processing
+            ith_loop = 0
+            while ((status == 'pending') or (status == 'processing')) and (ith_loop < 720): 
+                ith_loop += 1
+                print('  Status is not complete. Trying again.')
+                time.sleep(10)
+                loop_response = session.get(statusURL)
+    
+        # Raise bad request: Loop will stop for bad response code.
+                loop_response.raise_for_status()
+                loop_root = ET.fromstring(loop_response.content)
+    
+        #find status
+                statuslist = []
+                for status in loop_root.findall("./requestStatus/"):
+                    statuslist.append(status.text)
+                status = statuslist[0]
+                print('  Retry request status is: ', status)
+                if status == 'pending' or status == 'processing':
+                    continue
+    
+        #Order can either complete, complete_with_errors, or fail:
+        # Provide complete_with_errors error message:
+            if status == 'complete_with_errors' or status == 'failed':
+                messagelist = []
+                for message in loop_root.findall("./processInfo/"):
+                    messagelist.append(message.text)
+                print('error messages:')
+                print(messagelist)
+    
+        # Download zipped order if status is complete or complete_with_errors
+            downloadURL = 'https://n5eil02u.ecs.nsidc.org/esir/' + orderID + '.zip'
+            zip_response = session.get(downloadURL)
+            this_status_code = zip_response.status_code
+            if status == 'complete' or status == 'complete_with_errors':
+                print('Zip download URL: ', downloadURL)
+                print('Beginning download of zipped output...')
+                # Raise bad request: Loop will stop for bad response code.
+                zip_response.raise_for_status()
+                with zipfile.ZipFile(io.BytesIO(zip_response.content)) as z:
+                    z.extractall(path)
+                print('Data request', page_val, 'is complete.')
+            else: 
+                print('Request failed.')
+    
+    # if stream (synchronous) request
+    else:
+        for i in range(page_num):
+            page_val = i + 1
+            print('\nOrder: ', page_val)
+            print('Requesting...')
+            request = session.get(base_url, params=param_dict)
+            this_status_code = request.status_code
+            print('HTTP response from order response URL: ', this_status_code)
+            request.raise_for_status()
+            d = request.headers['content-disposition']
+            fname = re.findall('filename=(.+)', d)
+            dirname = os.path.join(path,fname[0].strip('\"'))
+            print('Downloading...')
+            open(dirname, 'wb').write(request.content)
+            print('Data request', page_val, 'is complete.')
+    
     # Unzip outputs
     for z in os.listdir(path): 
         if z.endswith('.zip'): 
@@ -441,16 +467,17 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
             zip_ref.extractall(path) 
             zip_ref.close() 
             os.remove(zip_name) 
-
+    
     # Clean up Outputs folder by removing individual granule folders 
     for root, dirs, files in os.walk(path, topdown=False):
         for file in files:
             try:
-                shutil.move(os.path.join(root, file), path)
+                shutil.move(os.path.join(root, file), os.path.join(path, file))
             except OSError:
                 pass
         for name in dirs:
-            os.rmdir(os.path.join(root, name))
+            # os.rmdir(os.path.join(root, name))
+            shutil.rmtree(os.path.join(root, name))
             
     print('\nUnzipped files and cleaned up directory.')
     print('Output data saved in:', granule_output_path)
@@ -464,8 +491,9 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
         filename = filelist[0]
     print('File to process: %s (%s)' % (filename, get_size(filename)))
     
-    print(filename, 'status:', request.status_code)
-    return filename, request.status_code
+    print('status:', this_status_code)
+    
+    return filename, this_status_code
 
 
 ##########################################################################################

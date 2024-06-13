@@ -65,11 +65,12 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
     if not os.path.exists(thispath): os.makedirs(thispath)
 
 # download the specified ICESat-2 data from NSIDC
+# download the specified ICESat-2 data from NSIDC
 try_nr = 1
 request_status_code = 0
-while (request_status_code != 200) & (try_nr <= 100):
+while (request_status_code != 200) & (try_nr <= 5):
     try:
-        print('Downloading granule from NSIDC. (try %i)' % try_nr)
+        print('\nDOWNLOADING GRANULE FROM NSIDC (try %i for asynchronous request)' % try_nr)
         input_filename, request_status_code = download_granule(
             args.granule, 
             args.download_gtxs, 
@@ -77,25 +78,51 @@ while (request_status_code != 200) & (try_nr <= 100):
             args.is2_data_dir, 
             decedc(edc().u), 
             decedc(edc().p), 
-            spatial_sub=True
+            spatial_sub=True,
+            request_mode='async'
         )
         if request_status_code != 200:
             print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
-            time.sleep(np.random.randint(low=60, high=600))
+            time.sleep(np.random.randint(low=10, high=30))
             try_nr += 1
         
     except:
         print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
         traceback.print_exc()
-        time.sleep(np.random.randint(low=60, high=600))
+        time.sleep(np.random.randint(low=10, high=30))
+        try_nr += 1
+        
+try_nr = 1
+while (request_status_code != 200) & (try_nr <= 100):
+    try:
+        print('\nDOWNLOADING GRANULE FROM NSIDC (try %i for streaming request)' % try_nr)
+        input_filename, request_status_code = download_granule(
+            args.granule, 
+            args.download_gtxs, 
+            args.polygon, 
+            args.is2_data_dir, 
+            decedc(edc().u), 
+            decedc(edc().p), 
+            spatial_sub=True,
+            request_mode='stream'
+        )
+        if request_status_code != 200:
+            print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
+            time.sleep(np.random.randint(low=60, high=300))
+            try_nr += 1
+        
+    except:
+        print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
+        traceback.print_exc()
+        time.sleep(np.random.randint(low=60, high=300))
         try_nr += 1
 
 # perform a bunch of checks to make sure everything went alright with the nsidc api
 print('Request status code:', request_status_code, request_status_code==200)
 if request_status_code == 200:
-    print('NSIDC API request was successful!')
+    print('\nNSIDC API request was successful!')
 if request_status_code != 200:
-    print('NSIDC API request failed. (Request status code: %i)' % request_status_code)
+    print('\nNSIDC API request failed. (Request status code: %i)' % request_status_code)
     sys.exit(127)
 if request_status_code==200:
     with open('success.txt', 'w') as f: print('we got some sweet data', file=f)
