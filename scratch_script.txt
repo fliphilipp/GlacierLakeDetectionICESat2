@@ -5,6 +5,14 @@ condor_release fliphilipp -constraint "HoldReasonCode==13"
 condor_q -long <cluster>.<job>    # to see all classad attributes
 condor_q <cluster> -held -af HoldReasonSubCode    # 256 for the transfer input file error held jobs
 
+
+ls detection_out_data | wc -l
+ls detection_out_plot/*quicklook*.jpg | wc -l
+ls detection_out_plot/*detail*.jpg | wc -l
+ls detection_out_plot | wc -l
+
+ls detection_out_data | wc -l; ls detection_out_plot/*quicklook*.jpg | wc -l; ls detection_out_plot/*detail*.jpg | wc -l; ls detection_out_plot | wc -l
+
 ###################################
 # to place running jobs on hold
 condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manually."
@@ -16,6 +24,14 @@ scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESa
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/gld2except91granules.tar.gz /Volumes/nox/Philipp/IceLakesRun2
 
 scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESat2/detection_out_data /Volumes/nox/Philipp/IceLakesRun2/extra_data
+
+###################################
+# zip up / transfer data
+tar -czvf /ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz detection_out_data detection_out_plot detection_out_stat
+# on lumos
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz /Volumes/nox2/phil/IceLakesRun3-test
+# on laptop
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz /mnt/c/Users/phili/Downloads
 
 ###################################
 # to combine all output stats into one file

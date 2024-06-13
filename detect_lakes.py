@@ -206,7 +206,7 @@ for i, lake in enumerate(lake_list):
                 datafile = lake.write_to_hdf5(h5name)
                 print('%sh5 data file, %s' % (start_print, get_size(datafile)))
                 start_print = ' | '
-                print('       %s' % datafile)
+                print('              data: %s' % datafile)
             except:
                 print('Could not write hdf5 file <%s>' % lake.lake_id)
                 traceback.print_exc()
