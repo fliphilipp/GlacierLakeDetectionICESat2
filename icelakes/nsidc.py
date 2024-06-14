@@ -158,7 +158,7 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
 
 ##########################################################################################
 # @profile
-def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=True, request_mode='async'): 
+def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=True, request_mode='async', email='no'): 
     
     print('--> parameters: granule_id = %s' % granule_id)
     print('                gtxs = %s' % gtxs)
@@ -331,7 +331,7 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
                   'page_size': page_size, 
                   'request_mode': request_mode, 
                   'agent': agent, 
-                  'email': 'yes'}
+                  'email': email}
     
     #Remove blank key-value-pairs
     param_dict = {k: v for k, v in param_dict.items() if v != ''}

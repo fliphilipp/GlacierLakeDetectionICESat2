@@ -1,8 +1,11 @@
 
-FIRST BATCH OF JOBS
-fliphilipp ID: 15209170   6/13 03:10      _      _  11304  11304 15209170.0-11303 HTCondor_submit/GLD3-GRE-0.submit
-fliphilipp ID: 15209272   6/13 03:11      _      _  17135  17135 15209272.0-17134 HTCondor_submit/GLD3-ANT1-0.submit
-fliphilipp ID: 15209273   6/13 03:12      _      _  17113  17113 15209273.0-17112 HTCondor_submit/GLD3-ANT2-0.submit
+#########################################################################################################################
+INITIAL SUBMISSIONS: 
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?... @ 06/13/24 17:25:32
+OWNER      BATCH_NAME      SUBMITTED   DONE   RUN    IDLE  TOTAL JOB_IDS
+fliphilipp ID: 15225508   6/13 17:17      _      _  11304  11304 15225508.0-11303 | HTCondor_submit/GLD3-GRE-0.submit 
+fliphilipp ID: 15225509   6/13 17:17      _      _  17135  17135 15225509.0-17134 | HTCondor_submit/GLD3-ANT1-0.submit
+fliphilipp ID: 15225510   6/13 17:18      _      _  17113  17113 15225510.0-17112 | HTCondor_submit/GLD3-ANT2-0.submit
 
-<need to wait to submit HTCondor_submit/GLD3-ANT3-0.submit because: Number of submitted jobs would exceed MAX_JOBS_PER_OWNER>
-(apparently this changed to 50K ???)
+NEED TO WAIT TO SUBMIT THE LAST FILE BECAUSE IT EXCEEDS TOTAL ALLOWED JOBS
+HTCondor_submit/GLD3-ANT3-0.submit

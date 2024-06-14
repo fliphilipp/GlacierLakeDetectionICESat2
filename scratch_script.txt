@@ -5,6 +5,9 @@ condor_release fliphilipp -constraint "HoldReasonCode==13"
 condor_q -long <cluster>.<job>    # to see all classad attributes
 condor_q <cluster> -held -af HoldReasonSubCode    # 256 for the transfer input file error held jobs
 
+rm -rf detection_out_data; mkdir detection_out_data; rm -rf detection_out_plot; mkdir detection_out_plot; rm -rf detection_out_stat; mkdir detection_out_stat; 
+rm -rf logs; mkdir logs; rm -rf errs; mkdir errs; rm -rf outs; mkdir outs; 
+
 
 ls detection_out_data | wc -l
 ls detection_out_plot/*quicklook*.jpg | wc -l
