@@ -1224,12 +1224,12 @@ def remove_duplicate_lakes(list_of_lakes, df, df_mframe, gtx, ancillary, polygon
 
                 # if the the lake surfaces don't overlap, but the attached lake segments do...
                 else: 
-                    if verbose:
-                            print('     lakes %i and %i: overlapping, but only in buffer ...trimming extra photon data' % (i, i-1))
                     # if the data segments overlap, trim them 
                     lk1_datarange = [lk1.lat_min, lk1.lat_max]
                     lk2_datarange = [lk2.lat_min, lk2.lat_max]
                     if ranges_overlap(lk1_datarange, lk2_datarange):
+                        if verbose:
+                            print('     lakes %i and %i: overlapping, but only in buffer ...trimming extra photon data' % (i, i-1))
                         lk_lowlat, lk_highlat = np.array([lk1, lk2])[np.argsort([lk1.lat, lk2.lat])]
                         if lk1.lat < lk2.lat: lk_lowlat, lk_highlat = lk1, lk2
                         if lk2.lat < lk1.lat: lk_lowlat, lk_highlat = lk2, lk1    
