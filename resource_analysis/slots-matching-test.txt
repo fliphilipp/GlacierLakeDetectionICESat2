@@ -1,0 +1,285 @@
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.0 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.000 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.000 defines the following attributes:
+
+    RequestDisk = 2000000 (kb)
+    RequestMemory = 2000 (mb)
+
+The Requirements expression for job 15303694.000 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       43986  HAS_SINGULARITY == true
+[1]       44666  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       43983  [0] && [1]
+[7]       41509  TARGET.Disk >= RequestDisk
+[8]       40829  [2] && [7]
+[9]       24298  TARGET.Memory >= RequestMemory
+[10]      20478  [8] && [9]
+[13]      44273  TARGET.HasSingularity
+[14]      20451  [10] && [13]
+[15]      42587  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]      19802  [14] && [15]
+[17]      23059  TARGET.SINGULARITY_CAN_USE_SIF
+[18]      14896  [16] && [17]
+
+
+15303694.000:  Run analysis summary ignoring user priority.  Of 10045 machines,
+   5802 are rejected by your job's requirements
+    811 reject your job because of their own requirements
+      0 match and are already running your jobs
+   1951 match but are serving other users
+   1481 are able to run your job
+
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.1 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.001 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.001 defines the following attributes:
+
+    RequestDisk = 4000000 (kb)
+    RequestMemory = 4000 (mb)
+
+The Requirements expression for job 15303694.001 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       44137  HAS_SINGULARITY == true
+[1]       44819  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       44135  [0] && [1]
+[7]       14039  TARGET.Disk >= RequestDisk
+[8]       13407  [2] && [7]
+[9]        5103  TARGET.Memory >= RequestMemory
+[10]       3586  [8] && [9]
+[13]      44427  TARGET.HasSingularity
+[14]       3572  [10] && [13]
+[15]      42778  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]       3027  [14] && [15]
+[17]      23252  TARGET.SINGULARITY_CAN_USE_SIF
+[18]       1768  [16] && [17]
+
+
+15303694.001:  Run analysis summary ignoring user priority.  Of 10035 machines,
+   8177 are rejected by your job's requirements
+    167 reject your job because of their own requirements
+      0 match and are already running your jobs
+    286 match but are serving other users
+   1405 are able to run your job
+
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ 
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.2 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.002 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.002 defines the following attributes:
+
+    RequestDisk = 8000000 (kb)
+    RequestMemory = 8000 (mb)
+
+The Requirements expression for job 15303694.002 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       43892  HAS_SINGULARITY == true
+[1]       44559  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       43874  [0] && [1]
+[7]        9599  TARGET.Disk >= RequestDisk
+[8]        8962  [2] && [7]
+[9]        3028  TARGET.Memory >= RequestMemory
+[10]       1264  [8] && [9]
+[13]      44185  TARGET.HasSingularity
+[14]       1251  [10] && [13]
+[15]      42515  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]       1064  [14] && [15]
+[17]      22876  TARGET.SINGULARITY_CAN_USE_SIF
+[18]        660  [16] && [17]
+
+
+15303694.002:  Run analysis summary ignoring user priority.  Of 10009 machines,
+   8485 are rejected by your job's requirements
+    152 reject your job because of their own requirements
+      0 match and are already running your jobs
+      0 match but are serving other users
+   1372 are able to run your job
+
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.3 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.003 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.003 defines the following attributes:
+
+    RequestDisk = 16000000 (kb)
+    RequestMemory = 16000 (mb)
+
+The Requirements expression for job 15303694.003 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       43743  HAS_SINGULARITY == true
+[1]       44405  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       43721  [0] && [1]
+[7]        7669  TARGET.Disk >= RequestDisk
+[8]        7407  [2] && [7]
+[9]        2191  TARGET.Memory >= RequestMemory
+[10]        663  [8] && [9]
+[13]      44036  TARGET.HasSingularity
+[14]        661  [10] && [13]
+[15]      42361  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]        484  [14] && [15]
+[17]      22724  TARGET.SINGULARITY_CAN_USE_SIF
+[18]        293  [16] && [17]
+
+
+15303694.003:  Run analysis summary ignoring user priority.  Of 10003 machines,
+   8688 are rejected by your job's requirements
+    127 reject your job because of their own requirements
+      0 match and are already running your jobs
+      0 match but are serving other users
+   1188 are able to run your job
+
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.4 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.004 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.004 defines the following attributes:
+
+    RequestDisk = 32000000 (kb)
+    RequestMemory = 32000 (mb)
+
+The Requirements expression for job 15303694.004 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       43750  HAS_SINGULARITY == true
+[1]       44420  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       43732  [0] && [1]
+[7]        5562  TARGET.Disk >= RequestDisk
+[8]        5379  [2] && [7]
+[9]         551  TARGET.Memory >= RequestMemory
+[10]        254  [8] && [9]
+[13]      44045  TARGET.HasSingularity
+[14]        252  [10] && [13]
+[15]      42379  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]        224  [14] && [15]
+[17]      22752  TARGET.SINGULARITY_CAN_USE_SIF
+[18]        132  [16] && [17]
+
+
+15303694.004:  Run analysis summary ignoring user priority.  Of 9994 machines,
+   9344 are rejected by your job's requirements
+     46 reject your job because of their own requirements
+      0 match and are already running your jobs
+      0 match but are serving other users
+    604 are able to run your job
+
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.5 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.005 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.005 defines the following attributes:
+
+    RequestDisk = 64000000 (kb)
+    RequestMemory = 64000 (mb)
+
+The Requirements expression for job 15303694.005 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       44026  HAS_SINGULARITY == true
+[1]       44692  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       44007  [0] && [1]
+[7]        3034  TARGET.Disk >= RequestDisk
+[8]        2874  [2] && [7]
+[9]         292  TARGET.Memory >= RequestMemory
+[10]        100  [8] && [9]
+[13]      44320  TARGET.HasSingularity
+[14]         99  [10] && [13]
+[15]      42668  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]         89  [14] && [15]
+[17]      23074  TARGET.SINGULARITY_CAN_USE_SIF
+[18]         56  [16] && [17]
+
+
+15303694.005:  Run analysis summary ignoring user priority.  Of 9967 machines,
+   9733 are rejected by your job's requirements
+     28 reject your job because of their own requirements
+      0 match and are already running your jobs
+      0 match but are serving other users
+    206 are able to run your job
+
+[fliphilipp@ap21 GlacierLakeDetectionICESat2]$ condor_q -better-analyze 15303694.6 -pool flock.opensciencegrid.org
+
+
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?...
+The Requirements expression for job 15303694.006 is
+
+    (HAS_SINGULARITY == true && OSG_HOST_KERNEL_VERSION >= 31000) && (TARGET.Arch == "X86_64") && (TARGET.OpSys == "LINUX") && (TARGET.Disk >= RequestDisk) &&
+    (TARGET.Memory >= RequestMemory) && (TARGET.HasFileTransfer) && TARGET.HasSingularity && StringListIMember("osdf",TARGET.HasFileTransferPluginMethods) && TARGET.SINGULARITY_CAN_USE_SIF
+
+Job 15303694.006 defines the following attributes:
+
+    RequestDisk = 128000000 (kb)
+    RequestMemory = 128000 (mb)
+
+The Requirements expression for job 15303694.006 reduces to these conditions:
+
+         Slots
+Step    Matched  Condition
+-----  --------  ---------
+[0]       43919  HAS_SINGULARITY == true
+[1]       44600  OSG_HOST_KERNEL_VERSION >= 31000
+[2]       43911  [0] && [1]
+[7]        1944  TARGET.Disk >= RequestDisk
+[8]        1846  [2] && [7]
+[9]          96  TARGET.Memory >= RequestMemory
+[10]         31  [8] && [9]
+[15]      42564  StringListIMember("osdf",TARGET.HasFileTransferPluginMethods)
+[16]         25  [10] && [15]
+[17]      22989  TARGET.SINGULARITY_CAN_USE_SIF
+[18]         20  [16] && [17]
+
+
+15303694.006:  Run analysis summary ignoring user priority.  Of 9959 machines,
+   9849 are rejected by your job's requirements
+     10 reject your job because of their own requirements
+      0 match and are already running your jobs
+      0 match but are serving other users
+    100 are able to run your job
