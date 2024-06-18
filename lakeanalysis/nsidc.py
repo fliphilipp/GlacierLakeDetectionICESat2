@@ -145,7 +145,7 @@ def download_is2(short_name='ATL03', start_date='2018-01-01', end_date='2030-01-
     #Determine number of orders needed for requests over 2000 granules. 
     page_num = math.ceil(len(granules)/page_size)
 
-    print('  --> There will be', page_num, 'total order(s) processed for our', short_name, 'request.')
+    print('  --> There will be', page_num, 'total order(s) processed for your', short_name, 'request.')
     param_dict = {'short_name': short_name, 
                   'version': latest_version, 
                   'temporal': temporal, 
@@ -157,7 +157,7 @@ def download_is2(short_name='ATL03', start_date='2018-01-01', end_date='2030-01-
                   'page_size': page_size, 
                   'request_mode': request_mode, 
                   'agent': agent, 
-                  'email': 'yes', }
+                  'email': 'no', }
 
     #Remove blank key-value-pairs
     param_dict = {k: v for k, v in param_dict.items() if v != ''}
@@ -170,7 +170,7 @@ def download_is2(short_name='ATL03', start_date='2018-01-01', end_date='2030-01-
     endpoint_list = [] 
     for i in range(page_num):
         page_val = i + 1
-        API_request = api_request = f'{base_url}?{param_string}&page_num={page_val}'
+        API_request = f'{base_url}?{param_string}&page_num={page_val}'
         endpoint_list.append(API_request)
 
     print('\n', *endpoint_list, sep = "\n") 

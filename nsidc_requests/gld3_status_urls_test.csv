@@ -1,0 +1,3 @@
+ice_sheet,melt_season,geojson,start_date,end_date,status_url,ngranules_list,request_code
+GrIS,2019,simplified_GRE_2200_CW.geojson,2019-05-01,2019-09-30,https://n5eil02u.ecs.nsidc.org/egi/request/5000005624129,98,201
+GrIS,2020,simplified_GRE_2200_CW.geojson,2020-05-01,2020-09-30,https://n5eil02u.ecs.nsidc.org/egi/request/5000005624130,110,201
