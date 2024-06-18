@@ -84,9 +84,9 @@ while (not download_successful) & (attempt_nr < 100):
         download_successful = True
         del response
     else:
-        sleepytime = np.random.randint(low=30, high=180)
+        sleepytime = np.random.randint(low=60, high=300)
         print(' - This attempt unsuccessful. Trying again in %i seconds...' % sleepytime)
-        time.sleep()
+        time.sleep(sleepytime)
 
 if download_successful:
     print('\n---> Data download from NSIDC was successful!!!')
