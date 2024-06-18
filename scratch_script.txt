@@ -21,6 +21,10 @@ ls detection_out_data | wc -l; ls detection_out_plot/*quicklook*.jpg | wc -l; ls
 condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manually."
 
 ###################################
+grep 'Memory (MB)          :' logs/*.log > resource_stats_memory.csv
+grep 'Disk (KB)            :' logs/*.log > resource_stats_disk.csv
+
+###################################
 # to transfer data back
 # make sure to combine stats files before and delete outs/logs/errs (zip before if want to keep) 
 scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESat2 /Volumes/nox/Philipp/<folder_name>

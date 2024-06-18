@@ -200,14 +200,19 @@ print('---> determining depth for each lake in the granule')
 for i, lake in enumerate(lake_list):
     try: 
         lake.surrf()
-        lake.get_sorting_quality()
-        print('     --> %3i/%3i, %s | %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (i+1, len(lake_list), lake.gtx, lake.lat, 
-                                                                                 lake.lon, lake.max_depth, lake.depth_quality_sort))
+        if hasattr(lake, 'depth_data'):
+            lake.get_sorting_quality()
+            print('     --> %3i/%3i, %s | %8.3fN, %8.3fE: %6.2fm deep / quality: %8.2f' % (i+1, len(lake_list), lake.gtx, lake.lat, 
+                                                                                     lake.lon, lake.max_depth, lake.depth_quality_sort))
+        else:
+            lake.lake_quality = 0.0
+            lake.depth_quality_sort = 0.0
+            print('     xxx Lake %i  has no valid surface (detection quality = %.5f) ... skipping:' % (i+1, lake.detection_quality))
     except:
-        print('Error for lake %i (detection quality = %.5f) ... skipping:' % (i+1, lake.detection_quality))
-        traceback.print_exc()
         lake.lake_quality = 0.0
         lake.depth_quality_sort = 0.0
+        print('     xxx Error for lake %i (detection quality = %.5f) ... skipping:' % (i+1, lake.detection_quality))
+        traceback.print_exc()
 
 # remove zero quality lakes
 # lake_list[:] = [lake for lake in lake_list if lake.lake_quality > 0]

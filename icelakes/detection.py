@@ -177,7 +177,8 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
             ph_index_beg = np.int64(f[beam]['geolocation']['ph_index_beg']) - 1
             segment_dist_x = np.array(f[beam]['geolocation']['segment_dist_x'])
             segment_length = np.array(f[beam]['geolocation']['segment_length'])
-            valid = ph_index_beg>=0 # need to delete values where there's no photons in the segment (-1 value)
+            ph_index_beg = np.array([x if x in df.index else -1 for x in ph_index_beg]) # just making sure all indices are matched in data
+            valid = ph_index_beg >= 0 # need to delete values where there's no photons in the segment (-1 value)
             df.loc[ph_index_beg[valid], 'xatc'] = segment_dist_x[valid]
             df.xatc.fillna(method='ffill',inplace=True)
             df.xatc += np.array(f[beam]['heights']['dist_ph_along'])
@@ -209,7 +210,7 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
             #### save to list of dataframes
             dfs[beam] = df
             dfs_tlm[beam] = df_tlm 
-            del df, dfs_tlm
+            del df, df_tlm
             gc.collect()
         
         except:
@@ -218,10 +219,10 @@ def read_atl03(filename, geoid_h=True, gtxs_to_read='all', clip_shape=None, down
             
     f.close()
     print(' --> done.')
-    if len(beamlist)==0:
+    if gtxs_to_read == 'none':
         return beams_available, ancillary
     else:
-        return beams_available, ancillary, dfs, df_tlm
+        return beams_available, ancillary, dfs, dfs_tlm
 
 ##########################################################################################
 # # @profile
@@ -374,11 +375,11 @@ def find_flat_lake_surfaces(df_mframe, df, bin_height_coarse=0.1, bin_height_fin
                 elif (peak_loc2<hmax2) & (peak_loc2>hmin2):
                     telem_min, telem_max = hmin2, hmax2
                 else:
-                    telem_min, telem_max = dfseg.h.min(), dfseg.h.max()
+                    telem_min, telem_max = dfseg.h.min()-20, dfseg.h.max()+20
 
                 # add buffer to telemetry window, because sometimes they have odd values
-                telem_min = np.min((telem_min, peak_loc2-30))
-                telem_max = np.max((telem_max, peak_loc2+10))
+                telem_min = np.min((telem_min, peak_loc2-5))
+                telem_max = np.max((telem_max, peak_loc2+2))
                 telems_min[i] = telem_min
                 telems_max[i] = telem_max
 
@@ -1279,7 +1280,7 @@ def get_clipped_granule(input_filename, gtx, polygon):
     photon_data = None
     del photon_data, clip_shape
     gc.collect()
-    return df, ancillary, tlm_data
+    return df, ancillary, tlm_data[gtx]
     
 
 ##########################################################################################
@@ -1939,9 +1940,11 @@ class melt_lake:
                 return evaldf, df_fit
 
         # get the relevant data (photon-level dataframe, water surface elevation estimate, extent estimate)
+        ext = self.surface_extent_detection
+        if len(ext) == 0:
+            return None
         df = self.photon_data.copy()
         h_surf = self.surface_elevation
-        ext = self.surface_extent_detection
         init_guess_bed = pd.DataFrame(self.detection_2nd_returns)
         df.sort_values(by='xatc', inplace=True, ignore_index=True)
 
