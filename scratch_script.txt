@@ -21,8 +21,8 @@ ls detection_out_data | wc -l; ls detection_out_plot/*quicklook*.jpg | wc -l; ls
 condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manually."
 
 ###################################
-grep 'Memory (MB)          :' logs/*.log > resource_stats_memory.csv
-grep 'Disk (KB)            :' logs/*.log > resource_stats_disk.csv
+grep 'Memory (MB)          :' logs/*.log > resource_stats_memory2.csv
+grep 'Disk (KB)            :' logs/*.log > resource_stats_disk2.csv
 
 ###################################
 # to transfer data back
