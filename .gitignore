@@ -27,3 +27,4 @@ failed_jobs/
 granule_stats/
 zzz*
 mprofile_*.dat
+!resource_analysis/resource-usage_plots.jpg

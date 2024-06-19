@@ -1,4 +1,23 @@
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?... @ 06/18/24 17:22:27
+OWNER      BATCH_NAME      SUBMITTED   DONE   RUN    IDLE  TOTAL JOB_IDS
+fliphilipp ID: 15306968   6/18 17:22      _      _  11303  11303 15306968.0-11302 | condor_submit HTCondor_submit/GLD3-GRE-0.submit 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!!
 #########################################################################################################################
 INITIAL SUBMISSIONS: 
 -- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?... @ 06/13/24 17:25:32

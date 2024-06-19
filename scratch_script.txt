@@ -40,6 +40,8 @@ scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/<name>.
 # on laptop
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz /mnt/c/Users/phili/Downloads
 
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3test_GrIS_NW_resource_adaptive.tar.gz /mnt/c/Users/phili/Documents/GLD3
+
 ###################################
 # to combine all output stats into one file
 filename_out=stats_combined.csv; >| $filename_out; for f in detection_out_stat/stat*.csv; do cat "${f}" >> $filename_out; done

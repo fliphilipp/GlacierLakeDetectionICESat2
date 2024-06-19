@@ -14,6 +14,6 @@ log           = logs/job_$(descriptor)-$(ClusterID)_$(granule_id)-$(ProcID).log
 error         = errs/job_$(descriptor)-$(ClusterID)_$(granule_id)-$(ProcID).err
 output        = outs/job_$(descriptor)-$(ClusterID)_$(granule_id)-$(ProcID).out
 request_cpus    = 1
-request_memory  = 8GB
-request_disk    = 8GB
-queue granule_url,granule_id,polygon,descriptor,polygon_full from granule_lists/gld3test-GRE-CW-0.csv
+request_memory  = $(mem_request)
+request_disk    = $(dsk_request)
+queue granule_url,granule_id,polygon,descriptor,polygon_full,mem_request,dsk_request from granule_lists/gld3test-GRE-CW-0.csv
