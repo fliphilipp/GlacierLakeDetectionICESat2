@@ -5,6 +5,8 @@ NOTE: This repo is private for now. (early testing stage)
 **A repository for automatic supraglacial lake detection and depth deptermination on the ice sheets in ICESat-2 data**
 
 ## Workflow: 
+
+### Setup:
 - Get a user account on the [OSG Open Science Pool](https://osg-htc.org/services/open_science_pool) (free for US-based researchers and their collaborators), or another high-throughput computing platform running HTCondor, that fulfills computing needs
 
 - If the [singularity](https://docs.sylabs.io/guides/3.5/user-guide/introduction.html#) container image `icelake-container_v1.sif` is not available, follow singularity install and container build instructions to build the container image from `singularity_container/icelake-container_v1.def` (need administrator privileges, so this step needs to be done locally). Alternatively, define your own container that fulfills the requirements.
@@ -12,11 +14,18 @@ NOTE: This repo is private for now. (early testing stage)
 
 - To be able to access ICESat-2 data, [create a NASA Earthdata user account](https://urs.earthdata.nasa.gov/). In this code, the class `icelakes.nsidc.edc` is used to read in credentials, but there are plenty of options to store credentials, they just need to be accessible to the jobs running on the OSG Pool. This can be changed directly in the main python script `detect_lakes.py`, where credentials are passed to `icelakes.nsidc.download_granule()`.
 
-- Based on the drainage basin regions (stored in `geojsons/`), make granule lists for each batch of data using the notebook `make_granule_list.ipynb` (choose combination of dates / melt seasons and basins). Basin definition from source ([Antarctica](https://nsidc.org/data/nsidc-0709/versions/2)/[Greenland](https://datadryad.org/stash/dataset/doi:10.7280/D1WT11)) is detailed in `make_basins.ipynb`.
+### New approach for NSIDC data access:
+- Data requests are based on the drainage basin regions (stored in `[geojsons/](geojsons/)`), which are the IMBIE basins with floating ice added to its nearest grounded basin. Basin definition from source ([Antarctica](https://nsidc.org/data/nsidc-0709/versions/2)/[Greenland](https://datadryad.org/stash/dataset/doi:10.7280/D1WT11)) is detailed in `[basins/make_basins.ipynb](basins/make_basins.ipynb)`.
+- Using the notebook `[request_data_and_make_granule_list.ipynb](request_data_and_make_granule_list.ipynb)`:
+  - Make all the needed **asynchonous** requests from NSIDC. There is one request per melt season / drainage shapefile combination.
+  - Monitor the progress of order processing at NSIDC.
+  - When all orders are complete, compile the granule list using the granule download links provided by NSIDC. These links will be active for 14 days.
+  - For large runs, request OSG job resources adaptively by specifiying requested memory and disk in the granule list for submission, based on the input file size of the subsetted granule at hand:
+  <br><pre><img alt="example plots of resource usage" src="resource_analysis/resource-usage_plots.jpg" width="60%"></pre>
+  - Create a Condor submit file for job submission, similar to the ones in `HTCondor_submit/`. Requesting 16 GB of both disk and memory will be sufficient for the vast majority of jobs.
+    - Make sure each batch does not exceed 20K jobs, and you don’t submit more than 100K jobs at once.
 
-- Create a Condor submit file for job submission, similar to the ones in `HTCondor_submit/`. Requesting 16 GB of both disk and memory will be sufficient for the vast majority of jobs.
-  - Make sure each batch does not exceed 20K jobs, and you don’t submit more than 100K jobs at once.
-  - 
+### Running the jobs on the OSG pool:
 - Before submitting the first cluster *make sure you have saved any of the output files that you want to keep from previous runs*, and then clear the directories for output file, outs, logs, errs with `rm detection_out_data/* detection_out_stat/* detection_out_plot/* logs/* errs/* outs/*`
 
 - **Submit the jobs** with `condor_submit HTCondor_submit/<your_submit_file>.submit`. [Monitor and troubleshoot jobs](https://portal.osg-htc.org/documentation/htc_workloads/submitting_workloads/monitor_review_jobs/) with condor_q and related commands. A few useful commands:
@@ -43,10 +52,12 @@ NOTE: This repo is private for now. (early testing stage)
     - Other jobs (usually re-started to often because of NSIDC API issues, or sometimes input file transfer failure) can be re-submitted to the pool, using a new submit file with the list generated in `resubmit_make_list.ipynb`
   - If all fails, maybe run a handful of jobs locally and troubleshoot??? / Or skip if something seems awfully off with the data…
 
+### Retrieving the output data:
 - **Transfer back output data** to a local computer with `scp` or move them to cloud storage using `rclone`. (for scp, ideally zip the entire directory and transfer that, if you don't need the log/err/out files anymore this is sped up substantially by removing those first, also helps to concatenate all the granule stats before)
   - *outside* the project directory `tar -czvf /ospool/ap21/data/<username>/<filename>.tar.gz path/to/GlacierLakeDetectionICESat2`
   - then `scp <username>@ap21.uc.osg-htc.org:/ospool/ap21/data/<username>/<filename>.tar.gz /path/to/local/folder`
- 
+
+### Post-processing:
 - use [`rename_data_and_get_stats.ipynb`](rename_data_and_get_stats.ipynb) to rename the output files in a way such that they are sorted by lake quality. this also creates a summary dataframe of lake locations and other properties (if you use the Ross Ice Shelf basins provided here, you may want to re-write these lakes properties by sorting them into the right original basin)
 - use [`make_quicklook_plots.ipynb`](https://github.com/fliphilipp/FLUIDSuRRF-code/blob/main/make_quicklook_plots.ipynb) to make "quicklook" plots for all the output files (this requires a [Google Earth Engine](https://earthengine.google.com/) account, and the associated Python API)
 - There might be some weird false positives, mostly over a few regions where the basins overlap with the ocean or ice-marginal lakes - browse through the quicklook images and manually remove files that are clearly not lakes. [`simple-image-labeler/`](https://github.com/fliphilipp/FLUIDSuRRF-code/tree/main/simple-image-labeler) includes a streamlit app that helps with sorting through output files for a final manual check, like this:
