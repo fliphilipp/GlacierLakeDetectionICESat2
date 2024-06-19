@@ -28,3 +28,4 @@ granule_stats/
 zzz*
 mprofile_*.dat
 !resource_analysis/resource-usage_plots.jpg
+!misc/granule_list_data.jpg
