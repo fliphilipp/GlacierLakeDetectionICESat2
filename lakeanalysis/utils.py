@@ -301,6 +301,6 @@ def read_melt_lake_h5(fn):
         lakedict['surface_extent_detection'] = re_nest_extent(lakedict['surface_extent_detection'])
         lakedict['lat_surface_extent_detection'] = re_nest_extent(lakedict['lat_surface_extent_detection'])
         
-        lakedict['date_time'] = convert_time_to_string(lakedict['mframe_data']['dt'].mean())
+        # lakedict['date_time'] = convert_time_to_string(lakedict['mframe_data']['dt'].mean())
         
         return lakedict
