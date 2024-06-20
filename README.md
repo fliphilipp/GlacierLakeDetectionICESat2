@@ -19,7 +19,8 @@ NOTE: This repo is private for now. (early testing stage)
 - Using the notebook `[request_data_and_make_granule_list.ipynb](request_data_and_make_granule_list.ipynb)`:
   - Make all the needed **asynchonous** requests from NSIDC. There is one request per melt season / drainage shapefile combination.
   - Monitor the progress of order processing at NSIDC.
-  - When all orders are complete, compile the granule list using the granule download links provided by NSIDC. These links will be active for 14 days.
+  - When all orders are complete, compile the granule list using the granule download links provided by NSIDC. These links will be active for 14 days. The final granule list (with extra info about the NSIDC request) should look something like this:
+    <br><pre><img alt="example of granule list with data request info" src="misc/granule_list_data.jpg" width="100%"></pre>
   - For large runs, request OSG job resources adaptively by specifiying requested memory and disk in the granule list for submission, based on the input file size of the subsetted granule at hand:
   <br><pre><img alt="example plots of resource usage" src="resource_analysis/resource-usage_plots.jpg" width="60%"></pre>
   - Create a Condor submit file for job submission, similar to the ones in `HTCondor_submit/`. Requesting 16 GB of both disk and memory will be sufficient for the vast majority of jobs.
