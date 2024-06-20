@@ -5,6 +5,15 @@ condor_release fliphilipp -constraint "HoldReasonCode==13"
 condor_q -long <cluster>.<job>    # to see all classad attributes
 condor_q <cluster> -held -af HoldReasonSubCode    # 256 for the transfer input file error held jobs
 
+# Show running jobs with attributes
+condor_q 15306968 -constraint 'JobStatus == 2' -format '%d.' ClusterId -format '%d ' ProcId -format '%s ' Owner -format '%d ' JobStatus -format '%s\n' Args 
+
+# Show idle jobs with attributes (JobStatus==1)
+condor_q 15306968 -constraint 'JobStatus == 1' -format '%d.' ClusterId -format '%d ' ProcId -format '%s ' Owner -format '%d ' JobStatus
+
+# Show held jobs with attributes (JobStatus==5)
+condor_q 15306968 -constraint 'JobStatus == 5' -format '%d.' ClusterId -format '%d ' ProcId -format '%s ' Owner -format '%d ' JobStatus
+
 rm -rf detection_out_data; mkdir detection_out_data; rm -rf detection_out_plot; mkdir detection_out_plot; rm -rf detection_out_stat; mkdir detection_out_stat; 
 rm -rf logs; mkdir logs; rm -rf errs; mkdir errs; rm -rf outs; mkdir outs; 
 
@@ -21,8 +30,11 @@ ls detection_out_data | wc -l; ls detection_out_plot/*quicklook*.jpg | wc -l; ls
 condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manually."
 
 ###################################
-grep 'Memory (MB)          :' logs/*.log > resource_stats_memory2.csv
-grep 'Disk (KB)            :' logs/*.log > resource_stats_disk2.csv
+grep 'Memory (MB)          :' logs/*.log > resource_stats_memory_gris.csv
+grep 'Disk (KB)            :' logs/*.log > resource_stats_disk_gris.csv
+
+grep "No success....." outs/*.out | wc -l
+grep 'Success!!!!!' outs/*.out | wc -l
 
 ###################################
 # to transfer data back
@@ -35,12 +47,15 @@ scp -r fliphilipp@ap21.uc.osg-htc.org:/home/fliphilipp/GlacierLakeDetectionICESa
 ###################################
 # zip up / transfer data
 tar -czvf /ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz detection_out_data detection_out_plot detection_out_stat
+tar -czvf /ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz detection_out_data detection_out_plot detection_out_stat logs errs outs
 # on lumos
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz /Volumes/nox2/phil/IceLakesRun3-test
 # on laptop
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/<name>.tar.gz /mnt/c/Users/phili/Downloads
 
-scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3test_GrIS_NW_resource_adaptive.tar.gz /mnt/c/Users/phili/Documents/GLD3
+tar -czvf /ospool/ap21/data/fliphilipp/gld_data/GLD3_GRIS_COMPLETE.tar.gz detection_out_data detection_out_plot detection_out_stat logs errs outs
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3_GRIS_COMPLETE.tar.gz /Volumes/nox2/phil/GLD3_complete
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3_GRIS_COMPLETE.tar.gz /mnt/c/Users/phili/Documents/GLD3_complete
 
 ###################################
 # to combine all output stats into one file

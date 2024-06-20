@@ -18,6 +18,9 @@
 # another test
 # python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624133/267711339/processed_ATL03_20190716051841_02770403_006_02.h5 --polygon geojsons/simplified_GRE_2200_CW.geojson
 
+# the one that seems to have trouble for greenland
+# python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624139/271812658/processed_ATL03_20200825091749_09320803_006_01.h5 --polygon geojsons/simplified_GRE_2200_SE.geojson
+
 import argparse
 import os
 import gc
