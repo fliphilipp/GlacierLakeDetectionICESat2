@@ -15,15 +15,15 @@ NOTE: This repo is private for now. (early testing stage)
 - To be able to access ICESat-2 data, [create a NASA Earthdata user account](https://urs.earthdata.nasa.gov/). In this code, the class `icelakes.nsidc.edc` is used to read in credentials, but there are plenty of options to store credentials, they just need to be accessible to the jobs running on the OSG Pool. This can be changed directly in the main python script `detect_lakes.py`, where credentials are passed to `icelakes.nsidc.download_granule()`.
 
 ### New approach for NSIDC data access:
-- Data requests are based on the drainage basin regions (stored in `[geojsons/](geojsons/)`), which are the IMBIE basins with floating ice added to its nearest grounded basin. Basin definition from source ([Antarctica](https://nsidc.org/data/nsidc-0709/versions/2)/[Greenland](https://datadryad.org/stash/dataset/doi:10.7280/D1WT11)) is detailed in `[basins/make_basins.ipynb](basins/make_basins.ipynb)`.
-- Using the notebook `[request_data_and_make_granule_list.ipynb](request_data_and_make_granule_list.ipynb)`:
+- Data requests are based on the drainage basin regions (stored in [`geojsons/`](geojsons/)), which are the IMBIE basins with floating ice added to its nearest grounded basin. Basin definition from source ([Antarctica](https://nsidc.org/data/nsidc-0709/versions/2)/[Greenland](https://datadryad.org/stash/dataset/doi:10.7280/D1WT11)) is detailed in [`basins/make_basins.ipynb`](basins/make_basins.ipynb).
+- Using the notebook [`request_data_and_make_granule_list.ipynb`](request_data_and_make_granule_list.ipynb):
   - Make all the needed **asynchonous** requests from NSIDC. There is one request per melt season / drainage shapefile combination.
   - Monitor the progress of order processing at NSIDC.
   - When all orders are complete, compile the granule list using the granule download links provided by NSIDC. These links will be active for 14 days. The final granule list (with extra info about the NSIDC request) should look something like this:
     <br><pre><img alt="example of granule list with data request info" src="misc/granule_list_data.jpg" width="100%"></pre>
   - For large runs, request OSG job resources adaptively by specifiying requested memory and disk in the granule list for submission, based on the input file size of the subsetted granule at hand:
-  <br><pre><img alt="example plots of resource usage" src="resource_analysis/resource-usage_plots.jpg" width="60%"></pre>
-  - Create a Condor submit file for job submission, similar to the ones in `HTCondor_submit/`. Requesting 16 GB of both disk and memory will be sufficient for the vast majority of jobs.
+  <br><pre><img alt="example plots of resource usage" src="resource_analysis/resource-usage_plots.jpg" width="70%"></pre>
+  - Create a Condor submit file for job submission, similar to the ones in [`HTCondor_submit/`](HTCondor_submit/). Requesting 16 GB of both disk and memory will be sufficient for the vast majority of jobs.
     - Make sure each batch does not exceed 20K jobs, and you don’t submit more than 100K jobs at once.
 
 ### Running the jobs on the OSG pool:
