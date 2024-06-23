@@ -30,8 +30,11 @@ ls detection_out_data | wc -l; ls detection_out_plot/*quicklook*.jpg | wc -l; ls
 condor_hold <cluster_id> -constraint "JobStatus==2" -reason "Job was held manually."
 
 ###################################
-grep 'Memory (MB)          :' logs/*.log > resource_stats_memory_gris.csv
-grep 'Disk (KB)            :' logs/*.log > resource_stats_disk_gris.csv
+grep 'Memory (MB)          :' logs/*.log > resource_analysis/resource_stats_memory_gris.csv
+grep 'Disk (KB)            :' logs/*.log > resource_analysis/resource_stats_disk_gris.csv
+
+grep -R 'Memory (MB)          :' logs > resource_analysis/resource_stats_memory_ais.csv
+grep -R 'Disk (KB)            :' logs > resource_analysis/resource_stats_disk_ais.csv
 
 grep "No success....." outs/*.out | wc -l
 grep 'Success!!!!!' outs/*.out | wc -l
