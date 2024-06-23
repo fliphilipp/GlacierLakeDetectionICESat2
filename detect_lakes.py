@@ -9,17 +9,17 @@
 # $ conda activate icelakes-env
 # $ python3 detect_lakes.py --granule <NSIDC download link to granule> --polygon geojsons/<polygon_name.geojson>
 
-# 30 lakes for testing
+# 30 ish lakes for testing (with NSIDC download)
 # python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624137/297348002/processed_ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2200_CW.geojson
 
-# 44 lakes for testing
+# 40+ lakes for testing (with NSIDC download)
 # python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624136/264467978/processed_ATL03_20220714010847_03381603_006_02.h5 --polygon geojsons/simplified_GRE_2200_CW.geojson
 
-# another test
-# python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624133/267711339/processed_ATL03_20190716051841_02770403_006_02.h5 --polygon geojsons/simplified_GRE_2200_CW.geojson
-
-# the one that seems to have trouble for greenland
+# the one that seems to have trouble for greenland --> finished on OSG!
 # python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624139/271812658/processed_ATL03_20200825091749_09320803_006_01.h5 --polygon geojsons/simplified_GRE_2200_SE.geojson
+
+# the one that keeps running out of memory for antarctica on OSG
+# python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624275/273048326/processed_ATL03_20211110235432_07561311_006_01.h5 --polygon geojsons/simplified_ANT_1000_East_E-Ep.geojson
 
 import argparse
 import os
@@ -61,35 +61,104 @@ for thispath in (args.is2_data_dir, args.out_data_dir, args.out_plot_dir):
     if not os.path.exists(thispath): 
         os.makedirs(thispath)
 
-# download the specified granule from NSIDC
-filename = args.granule.split('/')[-1]
-granule_id = filename.replace('processed_', '')
-input_filename = args.is2_data_dir + '/' + filename
-
-download_successful = False
-attempt_nr = 0
-
-while (not download_successful) & (attempt_nr < 100):
-    attempt_nr += 1
-    print('\nAttempting to download granule from NSIDC... (try %i)' % attempt_nr)
-    capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/ATL03.006.xml'
-    session = requests.session()
-    s = session.get(capability_url)
-    session.get(s.url,auth=(decedc(edc().u),decedc(edc().p)))
-    response = session.get(args.granule)
-    request_status_code = response.status_code
+# if the granule is provided via an NSIDC download link, just download it using that link
+# this is how most granules are processed, by making async requests to NSIDC and collecting 
+# download links when they finished processing
+# see README.md, and request_data_and_make_granule_list.ipynb
+if 'https://' in args.granule:
+    # download the specified granule from NSIDC
+    filename = args.granule.split('/')[-1]
+    granule_id = filename.replace('processed_', '')
+    input_filename = args.is2_data_dir + '/' + filename
     
-    if request_status_code == 200:
-        print(' - Saving file %s...' % args.granule)
-        with open(input_filename, 'wb') as file:
-            file.write(response.content)
-        print(' - Downloaded file %s: %s' % (input_filename, get_size(input_filename)))
-        download_successful = True
-        del response
-    else:
-        sleepytime = np.random.randint(low=60, high=300)
-        print(' - This attempt unsuccessful. Trying again in %i seconds...' % sleepytime)
-        time.sleep(sleepytime)
+    download_successful = False
+    attempt_nr = 0
+    
+    while (not download_successful) & (attempt_nr < 100):
+        attempt_nr += 1
+        print('\nAttempting to download granule from NSIDC... (try %i)' % attempt_nr)
+        capability_url = f'https://n5eil02u.ecs.nsidc.org/egi/capabilities/ATL03.006.xml'
+        session = requests.session()
+        s = session.get(capability_url)
+        session.get(s.url,auth=(decedc(edc().u),decedc(edc().p)))
+        response = session.get(args.granule)
+        request_status_code = response.status_code
+        
+        if request_status_code == 200:
+            print(' - Saving file %s...' % args.granule)
+            with open(input_filename, 'wb') as file:
+                file.write(response.content)
+            print(' - Downloaded file %s: %s' % (input_filename, get_size(input_filename)))
+            download_successful = True
+            del response
+        else:
+            sleepytime = np.random.randint(low=60, high=300)
+            print(' - This attempt unsuccessful. Trying again in %i seconds...' % sleepytime)
+            time.sleep(sleepytime)
+            
+# if the granule is provided by producer ID, then download the granule via async request
+# (with a synchronous/streaming request being the fallback option)
+# this should just be needed for granules that failed processing at NSIDC
+# in request_data_and_make_granule_list.ipynb these were saved to GLD3-NSIDC-processing-errors.csv
+# and processed in GLD3-failedNSIDC_granules.ipynb
+else:
+    try_nr = 0
+    request_status_code = 0
+    granule_id = args.granule
+    
+    while (request_status_code != 200) & (try_nr <= 3):
+        try_nr += 1
+        try:
+            print('\nDOWNLOADING GRANULE FROM NSIDC (try %i for asynchronous request)' % try_nr)
+            input_filename, request_status_code = download_granule(
+                args.granule, 
+                args.download_gtxs, 
+                args.polygon, 
+                args.is2_data_dir, 
+                decedc(edc().u), 
+                decedc(edc().p), 
+                spatial_sub=True,
+                request_mode='async',
+                sleep_time=10,
+                max_try_time=3600
+            )
+            if request_status_code != 200:
+                print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
+                time.sleep(60)
+            
+        except:
+            print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
+            traceback.print_exc()
+            time.sleep(60)
+
+    # stream request as fallback
+    if (request_status_code != 200):
+        try_nr = 0
+        while (request_status_code != 200) & (try_nr <= 10):
+            try_nr += 1
+            try:
+                print('\nDOWNLOADING GRANULE FROM NSIDC (try %i for streaming request)' % try_nr)
+                input_filename, request_status_code = download_granule(
+                    args.granule, 
+                    args.download_gtxs, 
+                    args.polygon, 
+                    args.is2_data_dir, 
+                    decedc(edc().u), 
+                    decedc(edc().p), 
+                    spatial_sub=True,
+                    request_mode='stream'
+                )
+                if request_status_code != 200:
+                    print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
+                    time.sleep(60)
+                
+            except:
+                print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
+                traceback.print_exc()
+                time.sleep(60)
+                
+    download_successful = True if (request_status_code == 200) else False
+    
 
 if download_successful:
     print('\n---> Data download from NSIDC was successful!!!')
@@ -109,57 +178,8 @@ if download_successful:
         if os.path.getsize(input_filename) < 500000: # 1 MB
             print('granule seems to be empty. nothing more to do here.') 
             sys.exit(69)
-            
-# download the specified ICESat-2 data from NSIDC
-# try_nr = 1
-# request_status_code = 0
-# while (request_status_code != 200) & (try_nr <= 5):
-#     try_nr += 1
-#     try:
-#         print('\nDOWNLOADING GRANULE FROM NSIDC (try %i for asynchronous request)' % try_nr)
-#         input_filename, request_status_code = download_granule(
-#             granule_id, 
-#             args.download_gtxs, 
-#             args.polygon, 
-#             args.is2_data_dir, 
-#             decedc(edc().u), 
-#             decedc(edc().p), 
-#             spatial_sub=True,
-#             request_mode='async'
-#         )
-#         if request_status_code != 200:
-#             print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
-#             time.sleep(np.random.randint(low=10, high=30))
-        
-#     except:
-#         print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
-#         traceback.print_exc()
-#         time.sleep(np.random.randint(low=10, high=30))
-        
-# try_nr = 1
-# while (request_status_code != 200) & (try_nr <= 100):
-#     try_nr += 1
-#     try:
-#         print('\nDOWNLOADING GRANULE FROM NSIDC (try %i for streaming request)' % try_nr)
-#         input_filename, request_status_code = download_granule(
-#             granule_id, 
-#             args.download_gtxs, 
-#             args.polygon, 
-#             args.is2_data_dir, 
-#             decedc(edc().u), 
-#             decedc(edc().p), 
-#             spatial_sub=True,
-#             request_mode='stream'
-#         )
-#         if request_status_code != 200:
-#             print('  --> Request unsuccessful (%i), trying again in a minute...\n' % request_status_code)
-#             time.sleep(np.random.randint(low=60, high=300))
-        
-#     except:
-#         print('  --> Request unsuccessful (error raised in code), trying again in a minute...\n')
-#         traceback.print_exc()
-#         time.sleep(np.random.randint(low=60, high=300))
 
+# read in the data
 gtx_list, ancillary = read_atl03(input_filename, gtxs_to_read='none')
 
 # detect melt lakes
