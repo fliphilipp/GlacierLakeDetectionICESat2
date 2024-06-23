@@ -57,6 +57,12 @@ tar -czvf /ospool/ap21/data/fliphilipp/gld_data/GLD3_GRIS_COMPLETE.tar.gz detect
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3_GRIS_COMPLETE.tar.gz /Volumes/nox2/phil/GLD3_complete
 scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3_GRIS_COMPLETE.tar.gz /mnt/c/Users/phili/Documents/GLD3_complete
 
+tar -czvf /ospool/ap21/data/fliphilipp/gld_data/GLD3_AIS_COMPLETE.tar.gz detection_out_data detection_out_plot detection_out_stat logs errs outs
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3_AIS_COMPLETE.tar.gz /Volumes/nox2/phil/GLD3_complete
+scp fliphilipp@ap21.uc.osg-htc.org:/ospool/ap21/data/fliphilipp/gld_data/GLD3_AIS_COMPLETE.tar.gz /mnt/c/Users/phili/Documents/GLD3_complete
+
+tar -xvzf /Volumes/nox2/phil/GLD3_complete/GLD3_AIS_COMPLETE.tar.gz -C /Users/parndt/jupyterprojects/GLD3_complete/AIS
+
 ###################################
 # to combine all output stats into one file
 filename_out=stats_combined.csv; >| $filename_out; for f in detection_out_stat/stat*.csv; do cat "${f}" >> $filename_out; done

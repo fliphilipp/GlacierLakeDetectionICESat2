@@ -1,30 +1,17 @@
+#########################################################################################################################
+# GREENLAND 2019-23
+#########################################################################################################################
 -- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?... @ 06/18/24 17:22:27
 OWNER      BATCH_NAME      SUBMITTED   DONE   RUN    IDLE  TOTAL JOB_IDS
 fliphilipp ID: 15306968   6/18 17:22      _      _  11303  11303 15306968.0-11302 | condor_submit HTCondor_submit/GLD3-GRE-0.submit 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!! - OLD!!!
 #########################################################################################################################
-INITIAL SUBMISSIONS: 
--- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?... @ 06/13/24 17:25:32
+# ANTARCTICA 2018-19 to 2022-23
+#########################################################################################################################
+-- Schedd: ap21.uc.osg-htc.org : <192.170.231.142:9618?... @ 06/20/24 14:31:38
 OWNER      BATCH_NAME      SUBMITTED   DONE   RUN    IDLE  TOTAL JOB_IDS
-fliphilipp ID: 15225508   6/13 17:17      _      _  11304  11304 15225508.0-11303 | HTCondor_submit/GLD3-GRE-0.submit 
-fliphilipp ID: 15225509   6/13 17:17      _      _  17135  17135 15225509.0-17134 | HTCondor_submit/GLD3-ANT1-0.submit
-fliphilipp ID: 15225510   6/13 17:18      _      _  17113  17113 15225510.0-17112 | HTCondor_submit/GLD3-ANT2-0.submit
+fliphilipp ID: 15334446   6/20 14:29      _      3  17132  17135 15334446.0-17134 | condor_submit HTCondor_submit/GLD3-ANT1-0.submit | 2018-19 and 2019-20
+fliphilipp ID: 15334447   6/20 14:30      _      _  17108  17108 15334447.0-17107 | condor_submit HTCondor_submit/GLD3-ANT2-0.submit | 2020-21 and 2021-22
+fliphilipp ID: 15334448   6/20 14:31      _      _   8504   8504 15334448.0-8503  | condor_submit HTCondor_submit/GLD3-ANT3-0.submit | 2022-23
 
-NEED TO WAIT TO SUBMIT THE LAST FILE BECAUSE IT EXCEEDS TOTAL ALLOWED JOBS
-HTCondor_submit/GLD3-ANT3-0.submit
