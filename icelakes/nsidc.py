@@ -158,7 +158,8 @@ def make_granule_list(geojson, start_date, end_date, icesheet, meltseason, list_
 
 ##########################################################################################
 # @profile
-def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=True, request_mode='async', email='no'): 
+def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, vars_sub='default', spatial_sub=True, request_mode='async', email='no',
+                     sleep_time=10, max_try_time=3600): 
     
     print('--> parameters: granule_id = %s' % granule_id)
     print('                gtxs = %s' % gtxs)
@@ -399,10 +400,10 @@ def download_granule(granule_id, gtxs, geojson, granule_output_path, uid, pwd, v
     
         #Continue loop while request is still processing
             ith_loop = 0
-            while ((status == 'pending') or (status == 'processing')) and (ith_loop < 720): 
+            while ((status == 'pending') or (status == 'processing')) and (ith_loop < int(np.ceil(max_try_time / sleep_time))): 
                 ith_loop += 1
                 print('  Status is not complete. Trying again.')
-                time.sleep(10)
+                time.sleep(sleep_time)
                 loop_response = session.get(statusURL)
     
         # Raise bad request: Loop will stop for bad response code.
