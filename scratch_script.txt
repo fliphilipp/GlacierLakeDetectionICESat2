@@ -17,6 +17,11 @@ condor_q 15306968 -constraint 'JobStatus == 5' -format '%d.' ClusterId -format '
 rm -rf detection_out_data; mkdir detection_out_data; rm -rf detection_out_plot; mkdir detection_out_plot; rm -rf detection_out_stat; mkdir detection_out_stat; 
 rm -rf logs; mkdir logs; rm -rf errs; mkdir errs; rm -rf outs; mkdir outs; 
 
+ls detection_context | wc -l
+ls detection_context/good_lake | wc -l
+ls detection_context/bad_no_lake | wc -l
+ls detection_context/lake_bad_depth | wc -l
+ls detection_context/interesting | wc -l
 
 ls detection_out_data | wc -l
 ls detection_out_plot/*quicklook*.jpg | wc -l

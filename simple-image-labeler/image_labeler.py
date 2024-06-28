@@ -18,8 +18,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # specify the image directory (change this)
-base_dir = 'zzz_testfolder' 
-image_dir = base_dir + '/unsorted'
+base_dir = '../../GLD3_complete/GrIS' 
+image_dir = base_dir + '/detection_context'
 st.sidebar.header("Working Directory")
 image_directory = st.sidebar.text_input("Image Directory", image_dir)
 
@@ -30,14 +30,14 @@ current_image = st.empty()
 # create columns with action buttons, and add keyboard shortcuts
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 with col2:
-    good_button = st.button(label=":green[**g**ood]", key='good', use_container_width=True)
+    good_button = st.button(label=":green[**g**: good]", key='good_lake', use_container_width=True)
 with col3:
-    bad_button = st.button(label=":red[**b**ad]", key='bad', use_container_width=True)
+    bad_button = st.button(label=":red[**b**: no lake]", key='bad_no_lake', use_container_width=True)
 with col4:
-    unsure_button = st.button(label=":blue[**u**nsure]", key='unsure', use_container_width=True)
+    unsure_button = st.button(label=":blue[**u**: bad depth]", key='lake_bad_depth', use_container_width=True)
 with col5:
-    interesting_button = st.button(label=":gray[**i**nteresting]", key='interesting', use_container_width=True)
-add_keyboard_shortcuts({'g': 'good', 'b': 'bad', 'u': 'unsure', 'i': 'interesting'})
+    interesting_button = st.button(label=":gray[**i**: interesting]", key='interesting', use_container_width=True)
+add_keyboard_shortcuts({'g': 'good_lake', 'b': 'bad_no_lake', 'u': 'lake_bad_depth', 'i': 'interesting'})
 
 # add columns for info section in the bottom
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -64,7 +64,7 @@ def main():
         img_files.sort()
         st.session_state['image_files'] = img_files
     if 'counts' not in st.session_state:
-        foldernames = ['good', 'bad', 'unsure', 'interesting']
+        foldernames = ['detection_context/' + x for x in ['good_lake', 'bad_no_lake', 'lake_bad_depth', 'interesting']]
         folderpaths = [image_dir[:image_dir.rfind('/')] + '/' + x for x in foldernames]
         for path in folderpaths:
             if not os.path.exists(path):
@@ -79,34 +79,34 @@ def main():
     label = None
     txtcol = 'gray'
     if good_button:
-        label = "good"
+        label = 'good_lake'
         txtcol = 'green'
         st.session_state['count_unsorted'] -= 1
         st.session_state['count_labeled'] += 1
         st.session_state['n_img'] += 1
     elif bad_button:
-        label = "bad"
+        label = 'bad_no_lake'
         txtcol = 'red'
         st.session_state['count_unsorted'] -= 1
         st.session_state['count_labeled'] += 1
         st.session_state['n_img'] += 1
     elif unsure_button:
-        label = "unsure"
+        label = 'lake_bad_depth'
         txtcol = 'blue'
         st.session_state['count_unsorted'] -= 1
         st.session_state['count_labeled'] += 1
         st.session_state['n_img'] += 1
     elif interesting_button:
-        label = "interesting"
+        label = 'interesting'
         txtcol = 'gray'
 
     if label:
-        st.session_state['counts'][label] += 1
+        st.session_state['counts']['detection_context/' + label] += 1
 
     i = st.session_state['n_img']
 
     # show the current image
-    if i < len(st.session_state.image_files):
+    if i <= len(st.session_state.image_files):
         image_file = st.session_state.image_files[i]
         image_path = os.path.join(image_directory, image_file)
         if label: 
@@ -119,19 +119,23 @@ def main():
     # write progress info summary
     pct_lab = int(np.round(st.session_state.count_labeled / st.session_state.count_total * 100))
     counts_totals.markdown(f'- {st.session_state.count_total} total \n- {st.session_state.count_unsorted} remaining \n- {pct_lab}% labeled')
-    counts_labeled.markdown(''.join([f'- {v} {k}\n' for k, v in st.session_state.counts.items()]))
+    labeldict = {'detection_context/good_lake': 'good', 
+                 'detection_context/bad_no_lake': 'no lake', 
+                 'detection_context/lake_bad_depth': 'bad depth', 
+                 'detection_context/interesting': 'interesting'}
+    counts_labeled.markdown(''.join([f'- {v} {labeldict[k]}\n' for k, v in st.session_state.counts.items()]))
 
     # do the file moving at the end
-    if label == "interesting":
+    if label == 'interesting':
         if i < len(st.session_state.image_files):
             imagetocopy_src = os.path.join(image_directory, st.session_state.image_files[i])
-            imagetocopy_dst = base_dir + '/' + label
+            imagetocopy_dst = base_dir + '/detection_context/' + label
             shutil.copy2(imagetocopy_src, imagetocopy_dst)
             st.session_state['last_img'] = imagetocopy_dst + '/' + st.session_state.image_files[i]
-    elif label in ['good', 'bad', 'unsure']:
-        if i <= len(st.session_state.image_files):
+    elif label in ['good_lake', 'bad_no_lake', 'lake_bad_depth']:
+        if i < len(st.session_state.image_files):
             imagetomove_src = os.path.join(image_directory, st.session_state.image_files[i-1])
-            imagetomove_dst = base_dir + '/' + label
+            imagetomove_dst = base_dir + '/detection_context/' + label
             shutil.move(imagetomove_src, imagetomove_dst)
             st.session_state['last_img'] = imagetomove_dst + '/' + st.session_state.image_files[i-1]
 
