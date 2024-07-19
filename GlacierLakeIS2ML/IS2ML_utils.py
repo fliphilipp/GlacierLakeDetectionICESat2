@@ -1058,6 +1058,7 @@ def get_data_and_plot(lake_id, FLUID_SuRRF_info, base_dir=None, ground_track_buf
     fn_check = 'training_data_CSVs/%s.jpg' % new_id
     if os.path.isfile(fn_check) and (not re_calculate_if_existing):
         print('--> already processed, skipping...')
+        return fn_check, None, None, None
         
     else:
         
@@ -1221,12 +1222,15 @@ def get_data_and_plot(lake_id, FLUID_SuRRF_info, base_dir=None, ground_track_buf
             lk_info['Rsquared_log_B2B3'] = 0.0 if (np.sum(fin) < min_fin) else pearsonr(-gdf_updated.depth[fin], bg_avg[fin]).statistic
             lk_info['Rsquared_log_B2B3_match'] = 0.0 if (np.sum(mat) < min_fin) else pearsonr(-gdf_updated.depth[mat], bg_avg[mat]).statistic
             fin = check_finite(gdf_updated.depth, np.log(gdf_updated.B2))
+            mat = ndwi_match & fin
             lk_info['Rsquared_log_B2'] = 0.0 if (np.sum(fin) < min_fin) else pearsonr(-gdf_updated.depth[fin], np.log(gdf_updated.B2)[fin]).statistic
             lk_info['Rsquared_log_B2_match'] = 0.0 if (np.sum(mat) < min_fin) else pearsonr(-gdf_updated.depth[mat], np.log(gdf_updated.B2)[mat]).statistic
             fin = check_finite(gdf_updated.depth, np.log(gdf_updated.B3))
+            mat = ndwi_match & fin
             lk_info['Rsquared_log_B3'] = 0.0 if (np.sum(fin) < min_fin) else pearsonr(-gdf_updated.depth[fin], np.log(gdf_updated.B3)[fin]).statistic
             lk_info['Rsquared_log_B3_match'] = 0.0 if (np.sum(mat) < min_fin) else pearsonr(-gdf_updated.depth[mat], np.log(gdf_updated.B3)[mat]).statistic
             fin = check_finite(gdf_updated.depth, np.log(gdf_updated.B4))
+            mat = ndwi_match & fin
             lk_info['Rsquared_log_B4'] = 0.0 if (np.sum(fin) < min_fin) else pearsonr(-gdf_updated.depth[fin], np.log(gdf_updated.B4)[fin]).statistic
             lk_info['Rsquared_log_B4_match'] = 0.0 if (np.sum(mat) < min_fin) else pearsonr(-gdf_updated.depth[mat], np.log(gdf_updated.B4)[mat]).statistic
             lk_info['Rsquared_max_full'] = lk_info[['Rsquared_log_B2', 'Rsquared_log_B3', 'Rsquared_log_B4', 'Rsquared_log_B2B3']].max()
