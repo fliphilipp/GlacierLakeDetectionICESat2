@@ -1,0 +1,7 @@
+S2_MTD/*.xml
+atl03_segments/*.h5
+imagery_gt/*.csv
+imagery_gt/*.tiff
+imagery_gt/*.tif
+training_data_CSVs/*.csv
+training_data_CSVs/*.jpg

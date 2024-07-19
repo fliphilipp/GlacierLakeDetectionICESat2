@@ -9,6 +9,10 @@
 # $ conda activate icelakes-env
 # $ python3 detect_lakes.py --granule <NSIDC download link to granule> --polygon geojsons/<polygon_name.geojson>
 
+# can also download granule in script by producer_id: 
+# $ conda activate icelakes-env
+# $ python3 detect_lakes.py --granule <granule producer_id> --polygon geojsons/<polygon_name.geojson>
+
 # 30 ish lakes for testing (with NSIDC download)
 # python3 detect_lakes.py --granule https://n5eil02u.ecs.nsidc.org/esir/5000005624137/297348002/processed_ATL03_20230806063138_07192003_006_02.h5 --polygon geojsons/simplified_GRE_2200_CW.geojson
 

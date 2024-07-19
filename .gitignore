@@ -29,3 +29,5 @@ zzz*
 mprofile_*.dat
 !resource_analysis/resource-usage_plots.jpg
 !misc/granule_list_data.jpg
+misc/test1
+sonar_data_plots.tar.gz
