@@ -7,6 +7,7 @@ import ee
 import sys
 import h5py
 import math
+import time
 import boto3
 import pyproj
 import shapely
@@ -36,6 +37,7 @@ from rasterio import plot as rioplot
 from rasterio.features import shapes
 import matplotlib.gridspec as gridspec
 import matplotlib.transforms as mtrans
+from IPython.display import clear_output
 from matplotlib.patches import Rectangle
 from shapely.geometry import MultiPolygon
 from IPython.display import Image, display
@@ -1029,6 +1031,7 @@ def plot_IS2S2_lake(lk, lk_info, gdf_s2_plot, cloudfree_collection, first_image,
     fig.savefig(figpath, dpi=dpi_save)
     if show_plot:
         display(fig)
+        time.sleep(1)
 
     return figpath
 
