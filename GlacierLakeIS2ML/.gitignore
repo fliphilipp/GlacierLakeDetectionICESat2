@@ -5,4 +5,9 @@ imagery_gt/*.tiff
 imagery_gt/*.tif
 training_data_CSVs/*.csv
 training_data_CSVs/*.jpg
+data_paper/*.csv
+data_paper/*.parquet
+training_data_gris/*
+__pycache__
 zzz_*
+!plots/*.jpg
