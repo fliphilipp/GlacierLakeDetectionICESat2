@@ -222,7 +222,8 @@ def get_image_along_track(lk, img_gt, ground_track_buffer=7.5):
     dfbands = lk.depth_data.join(dfS2, on='plot_id', how='left')# .rename(columns={'probability': 'cloud_prob'})
     
     # Calculate NDWI (Normalized Difference Water Index)
-    dfbands['ndwi'] = (dfbands.B2 - dfbands.B4) / (dfbands.B2 + dfbands.B4)
+    dfbands['ndwi'] = (dfbands.B2 - dfbands.B4) / (dfbands.B2 + dfbands.B4 + 1e-15)
+    dfbands.loc[(dfbands.B2 + dfbands.B4) == 0, 'ndwi'] = 1.0
 
     # get surface classification as the median 
     bandNames = ['SCL', 'MSK_CLDPRB'] # hacky fix because it doesn't seem to work with a single band 
@@ -243,23 +244,26 @@ def get_image_along_track(lk, img_gt, ground_track_buffer=7.5):
 
 
 ################################################################################################################################################
-def get_metadata_file(img_gt):
+def get_metadata_file(img_gt, l2a_product_id=None, l2a_granule_id=None):
     
     # Initialize S3 resource
     k, s = return_key_secret()
     s3 = s3resource(k, s)
-    
-    l2a_product_id = img_gt.get('PRODUCT_ID').getInfo()
-    l2a_granule_id = img_gt.get('GRANULE_ID').getInfo()
+
+    if not l2a_product_id:
+        l2a_product_id = img_gt.get('PRODUCT_ID').getInfo()
+    if not l2a_granule_id:
+        l2a_granule_id = img_gt.get('GRANULE_ID').getInfo()
     
     def download_metadata_file_s3(product_id, granule_id):
-        year = product_id[11:15]
-        month = product_id[15:17]
-        day = product_id[17:19]
-        path = f"Sentinel-2/MSI/{granule_id[:3]}/{year}/{month}/{day}/{product_id}.SAFE/GRANULE/{granule_id}/MTD_TL.xml"
-        bucket = s3.Bucket('eodata')
         meta_fn_save = f"S2_MTD/{product_id}_MTD_TL.xml"
+        print('\ndownloading %s' % meta_fn_save)
         if not os.path.isfile(meta_fn_save):
+            year = product_id[11:15]
+            month = product_id[15:17]
+            day = product_id[17:19]
+            path = f"Sentinel-2/MSI/{granule_id[:3]}/{year}/{month}/{day}/{product_id}.SAFE/GRANULE/{granule_id}/MTD_TL.xml"
+            bucket = s3.Bucket('eodata')
             bucket.download_file(path, meta_fn_save)
         return meta_fn_save
     
@@ -269,6 +273,13 @@ def get_metadata_file(img_gt):
     except:
         # if it doesn't work, try L1C data for the angles
         try:
+            if not img_gt:
+                collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                yr = product_id[11:15]
+                mn = product_id[15:17]
+                dy = int(product_id[17:19])
+                thisdate = ee.Date('%s-%s-%s' % (yr,mn,dy))
+                img_gt = collection.filterDate(thisdate.advance(-1, 'day'), thisdate.advance(1, 'day')).filter(ee.Filter.eq('PRODUCT_ID', product_id)).first()
             l2a_start_time = img_gt.get('system:time_start').getInfo()
             collection = ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
             filt = collection.filter(ee.Filter.date(l2a_start_time-1, l2a_start_time+1))
@@ -1293,3 +1304,932 @@ def get_data_and_plot(lake_id, FLUID_SuRRF_info, base_dir=None, ground_track_buf
             print('')
             traceback.print_exc()
             return fig_path, None, None, None
+
+            
+################################################################################################################################################
+def duration_string(tsec):
+    days, rem = divmod(tsec, 24 * 60 * 60)
+    hrs, rem = divmod(rem, 60 * 60)
+    mins, secs = divmod(rem, 60)
+    days = '' if days == 0 else '%i days, ' % days
+    hrs = '' if hrs == 0 else '%i hrs, ' % hrs
+    mins = '' if mins == 0 else '%i mins, ' % mins
+    secs = '%i secs' % secs
+    tdiff_str = '%s%s%s%s' % (days,hrs,mins,secs)
+    return tdiff_str
+
+
+################################################################################################################################################
+def get_sonar_tdiff_collection(gdf, days_buffer=7, max_cloudiness=20, min_sun_elevation=20, limit_n_imgs=30, bbox_buffer=0.5):
+
+    # get time parameters
+    tformat_out = '%Y-%m-%dT%H:%M:%SZ'
+    date_time_sonar = datetime.strftime(datetime.fromtimestamp(gdf.timestamp.median(), tz=timezone.utc), tformat_out)
+    
+    # get the bounding box
+    lon_rng = gdf.lon.max() - gdf.lon.min()
+    lat_rng = gdf.lat.max() - gdf.lat.min()
+    fac = bbox_buffer
+    bbox = [gdf.lon.min()-fac*lon_rng, gdf.lat.min()-fac*lat_rng, 
+            gdf.lon.max()+fac*lon_rng, gdf.lat.max()+fac*lat_rng]
+    poly = [(bbox[x[0]], bbox[x[1]]) for x in [(0,1), (2,1), (2,3), (0,3), (0,1)]]
+    roi = ee.Geometry.Polygon(poly)
+    
+    cloudfree_collection = get_cloudfree_S2_collection(area_of_interest=roi, 
+                                                    date_time=date_time_sonar, 
+                                                    days_buffer=days_buffer, 
+                                                    max_cloud_scene=max_cloudiness,
+                                                    min_sun_elevation=min_sun_elevation)
+    
+    #cloudfree_collection = cloudfree_collection.filter(ee.Filter.lt('ground_track_cloud_prob', max_cloud_scene))
+    # collection_size = cloudfree_collection.size().getInfo()
+                         
+    def set_time_difference(img, timestamp=gdf.timestamp.median()):
+        timediff = ee.Date(timestamp*1000).difference(img.get('system:time_start'), 'second').abs()
+        return img.set('timediff', timediff)
+        
+    cloudfree_collection = cloudfree_collection.map(set_time_difference).sort('timediff').limit(limit_n_imgs)
+    return cloudfree_collection
+
+
+################################################################################################################################################
+def get_image_along_sonar(gdf, img_gt, ground_track_buffer=5.0):
+
+    # get the ground track, and clip image to the buffer
+    # clipping is needed for fractional pixel values (i.e. a weighted mean) in the footprint
+    ground_track_coordinates = list(zip(gdf.lon, gdf.lat))
+    gtx_feature = ee.Geometry.LineString(coords=ground_track_coordinates, proj='EPSG:4326', geodesic=True)
+    aoi = gtx_feature.buffer(ground_track_buffer)
+    img_gt = img_gt.clip(aoi)
+    
+    # Create feature collection from the depth data points
+    pts =  ee.FeatureCollection([
+        ee.Feature(ee.Geometry.Point([r.lon, r.lat]), {'plot_id': i}) for i, r in gdf.iterrows()
+    ])
+    
+    # Buffer the points
+    ptsS2 = pts.map(bufferPoints(ground_track_buffer))
+    
+    # Create an image collection with the clipped image
+    thiscoll = ee.ImageCollection([img_gt])
+    
+    # Define band names and indices
+    bandNames = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B11', 'B12', 'cloudScore', 'AOT', 'WVP', 'MSK_CLDPRB', 'MSK_SNWPRB']
+    
+    # Get the band names in the collection (probability will be the last index beyond the bands given by Sentinel2 collection)
+    band_names_img = img_gt.bandNames().getInfo()
+    band_indices_img = {band_name: index for index, band_name in enumerate(band_names_img)}
+    band_indices_img.update({'cloudScore': len(band_names_img)-1})
+    bandIdxs = [band_indices_img[band] for band in bandNames]
+    
+    # Query the Sentinel-2 bands at the ground track locations
+    ptsData = zonalStats(thiscoll, ptsS2, bands=bandIdxs, bandsRename=bandNames, imgProps=['PRODUCT_ID'], scale=5)
+    
+    # Select only the required features before calling .getInfo()
+    features_select = ['plot_id'] + bandNames
+    results = ptsData.select(features_select, retainGeometry=False).getInfo()['features']
+    
+    # Extract properties and the ID from the results
+    data = [{**x['properties'], 's2_id': x['id']} for x in results]
+    dfS2 = pd.DataFrame(data).set_index('plot_id')
+    
+    # Merge the results with the lake depth data
+    gdf['plot_id'] = gdf.index
+    dfbands = gdf.join(dfS2, on='plot_id', how='left')# .rename(columns={'probability': 'cloud_prob'})
+    
+    # Calculate NDWI (Normalized Difference Water Index)
+    dfbands['ndwi'] = (dfbands.B2 - dfbands.B4) / (dfbands.B2 + dfbands.B4 + 1e-15)
+    dfbands.loc[(dfbands.B2 + dfbands.B4) == 0, 'ndwi'] = 1.0
+
+    # get surface classification as the median 
+    bandNames = ['SCL', 'MSK_CLDPRB'] # hacky fix because it doesn't seem to work with a single band 
+    bandIdxs = [band_indices_img[band] for band in bandNames]
+    ptsData = zonalStats(thiscoll, ptsS2, bands=bandIdxs, bandsRename=bandNames, imgProps=['PRODUCT_ID'], scale=5, reducer=ee.Reducer.median())
+    features_select = ['plot_id'] + bandNames
+    results = ptsData.select(features_select, retainGeometry=False).getInfo()['features']
+    data = [x['properties'] for x in results]
+    dfscl = pd.DataFrame(data).set_index('plot_id').drop(columns=['MSK_CLDPRB'])
+    
+    dfout = dfbands.join(dfscl, on='plot_id', how='left')
+
+    product_id, datetime_print_s2, tdiff_str, tsec = get_img_props_sonar(img_gt, gdf)
+    dfout['S2_id'] = product_id
+    dfout['tdiff_sec'] = tsec
+    
+    return dfout
+
+################################################################################################################################################
+def get_timediff_sonar(selectedImage, gdf):
+    tformat_out = '%Y-%m-%dT%H:%M:%SZ'
+    tformat_print = '%a, %-d %b %Y, %-I:%M %p UTC'
+    s2datetime = datetime.fromtimestamp(selectedImage.get('system:time_start').getInfo()/1e3)
+    sonardatetime = datetime.fromtimestamp(gdf.timestamp.median(), tz=timezone.utc)
+    #is2datetime = datetime.strptime(lk.date_time, tformat_out)
+    datetime_print_s2 = datetime.strftime(s2datetime, tformat_print)
+    t_s2 = s2datetime.replace(tzinfo=timezone.utc)
+    t_sonar = sonardatetime.replace(tzinfo=timezone.utc)
+    tdiff = t_s2 - t_sonar
+    tsec = tdiff.total_seconds()
+    sign = 'before' if np.sign(tsec) < 0 else 'after'
+    tsec = np.abs(tsec) 
+    days, rem = divmod(tsec, 24 * 60 * 60)
+    hrs, rem = divmod(rem, 60 * 60)
+    mins, secs = divmod(rem, 60)
+    days = '' if days == 0 else '%i days, ' % days
+    hrs = '' if hrs == 0 else '%i hrs, ' % hrs
+    mins = '%i mins' % mins
+    tdiff_str = '%s%s%s %s ICESat-2' % (days,hrs,mins,sign)
+
+    return  int(np.round(tsec)), tdiff_str, datetime_print_s2
+
+    
+################################################################################################################################################
+def get_img_props_sonar(selectedImage, gdf, savefile=False):
+    
+    product_id = selectedImage.get('PRODUCT_ID').getInfo()
+    tsec, tdiff_str, datetime_print_s2 = get_timediff_sonar(selectedImage, gdf)
+
+    if savefile:
+        df_props = pd.DataFrame({'product_id': product_id, 
+                                 'datetime_print_s2': datetime_print_s2, 
+                                 'tdiff_seconds': tsec,
+                                 'tdiff_str': tdiff_str}, index=[0])
+        df_props.to_csv(savefile, index=False)
+
+    return product_id, datetime_print_s2, tdiff_str, tsec
+
+
+################################################################################################################################################
+def get_S2_along_sonar(gdf, fn=None, days_buffer=7, min_sun_elevation=20, max_cloudiness=20, limit_n_imgs=20, ground_track_buffer=5.0):
+
+    if not fn:
+        fn = 'sonar_data'
+
+    print('get cloudfree collection')
+    cloudfree_collection = get_sonar_tdiff_collection(gdf, 
+                                                      days_buffer=days_buffer, 
+                                                      max_cloudiness=max_cloudiness, 
+                                                      min_sun_elevation=min_sun_elevation, 
+                                                      limit_n_imgs=limit_n_imgs, 
+                                                      bbox_buffer=0.5)
+    image_list = cloudfree_collection.toList(cloudfree_collection.size())
+    n_images = cloudfree_collection.size().getInfo()
+    print('--> there are %i images for the given parameters ' % n_images, end=' ')
+    print('[days_buffer=%.0f, min_sun_elevation=%.0f, max_cloudiness=%.0f, limit_n_imgs=%0.f]' % (days_buffer, min_sun_elevation, max_cloudiness, limit_n_imgs))
+    
+    is_missing_data = True
+    ith_image = 0
+    made_query = False
+    closest_scene = 'none'
+    gdf_updated = None
+    
+    # iterate through all scenes while still missing data
+    while is_missing_data and (ith_image < n_images):
+    
+        # get the image
+        thisImage = ee.Image(image_list.get(ith_image))
+    
+        # increment image idx
+        ith_image += 1
+        print('    image %2i:' % ith_image, end=' ')
+    
+        # quick check if footprint matches the ICESat-2 ground track
+        footprint_ee = thisImage.get('system:footprint').getInfo()
+        #footprint_gdf = gpd.GeoDataFrame(geometry=[Polygon(footprint_ee['coordinates'])], crs="EPSG:4326")
+        footprint_polygon = Polygon(footprint_ee['coordinates'])
+    
+        # always query Sentinel-2 for the first image
+        df_ground_track_missing_data = gdf if (not made_query) else gdf_img[missing_idxs_now]
+        ground_track = gpd.GeoDataFrame(geometry=gpd.points_from_xy(df_ground_track_missing_data.lon, df_ground_track_missing_data.lat), crs="EPSG:4326")
+        within_idxs = ground_track.within(footprint_polygon)
+        in_footprint = within_idxs.any()
+        all_in_footprint = within_idxs.all()
+    
+        if not in_footprint:
+            print('--> not in footprint', end=' ')
+    
+        if in_footprint:
+    
+            if all_in_footprint:
+                print('--> fully in footprint', end=' ')
+            else:
+                print('--> partially in footprint', end=' ')
+                
+            # if this is not the first image:
+            # copy over the missing data column positions from the previous iteration
+            if made_query:
+                missing_idxs_previous = missing_idxs_now.copy()
+    
+            try:
+                # get the along-track values from google earth engine
+                print('--> get EE data', end=' ')
+                df_ee = get_image_along_sonar(gdf, thisImage, ground_track_buffer=ground_track_buffer)
+        
+                # save the metadata file with the sun/view angle grids from AWS S3
+                print('--> get metadata from S3', end=' ')
+                meta_fn_save = get_metadata_file(thisImage)
+        
+                # interpolate angle grids to ICESat-2 ground track
+                print('--> interpolate angles', end=' ')
+                gdf_img = add_interpolated_angles(meta_fn_save, df_ee)
+        
+                # fill any missing values with the ee-provided mean angles
+                gdf_img = fill_na_angles_with_means(gdf_img, thisImage)
+        
+                # check if any data is still missing 
+                missing_idxs_thisImage = gdf_img[s2keys].isna().any(axis=1)
+                
+                # if it's the first image create gdf_updated
+                if (not made_query):
+                    print('--> got first S2 data', end=' ')
+                    gdf_updated = gdf_img.copy()
+                    
+                # if it's not the first image, update the values that were missing in the previous iteration
+                else:
+                    # get positions where there was data missing previously, but now there is new data
+                    print('--> get missing data', end=' ')
+                    has_newdata_idxs = missing_idxs_previous & (~missing_idxs_thisImage)
+        
+                    # if there is any newly updated data
+                    if has_newdata_idxs.any():
+                        print('--> got more data', end=' ')
+                        # update in gdf_updated, where we collect all the results
+                        gdf_updated.loc[has_newdata_idxs,:] = gdf_img[has_newdata_idxs]
+        
+                # update is_missing_data to tell the while loop to stop once we have data for all ground track locations
+                missing_idxs_now = gdf_updated[s2keys].isna().any(axis=1)
+                is_missing_data = missing_idxs_now.any()
+                nmissing = missing_idxs_now.sum()
+                ntotal = len(missing_idxs_now)
+                ndone = '(%i/%i)' % (ntotal-nmissing, ntotal)
+    
+                # set queried flag to True once getting data from the first image
+                if (~missing_idxs_now).any():
+                    made_query = True
+                    closest_scene = thisImage.get('scene_id').getInfo()
+                    first_image = thisImage
+    
+                print(('--> still missing data %s...' % ndone) if is_missing_data else ('--> complete. (%i data points)' % ntotal))
+    
+            except:
+                traceback.print_exc()
+    
+    gdf_temp = gdf_updated.copy()
+    gdf_temp['depth'] = gdf_temp.Depth
+    gdf_temp['conf'] = 1.0
+    gdf_temp['h_fit_surf'] = 0.0
+    gdf_temp['h_fit_bed'] = 0.0
+    gdf_final = gdf_temp[is2keys + s2keys].copy()
+    this_id = 'lutz_' + fn.split('/')[-1].replace('.shp','')
+    gdf_final['IS2_id'] = this_id
+    gdf_final = gdf_final[~gdf_final[is2keys].isna().any(axis=1)]
+    training_data_csv_dir = 'sonar/sonar_S2_CSVs/'
+    if not os.path.exists(training_data_csv_dir):
+        os.makedirs(training_data_csv_dir)
+    gdf_final_fn = '%s%s.csv' % (training_data_csv_dir, this_id)
+    gdf_final.to_csv(gdf_final_fn, index=False)
+    print('saved file: %s' % gdf_final_fn)
+
+    return gdf_final
+
+
+################################################################################################################################################
+def get_sentinel2_cloud_collection_buffer(lon, lat, date_time, days_buffer, buffer_m=2500, CLD_PRB_THRESH=40, BUFFER=100):
+    # create the area of interest for cloud likelihood assessment
+    point_of_interest = ee.Geometry.Point(lon, lat)
+    area_of_interest = point_of_interest.buffer(buffer_m)
+
+    datetime_requested = datetime.strptime(date_time, '%Y-%m-%dT%H:%M:%SZ')
+    start_date = (datetime_requested - timedelta(days=days_buffer)).strftime('%Y-%m-%dT%H:%M:%S')
+    end_date = (datetime_requested + timedelta(days=days_buffer)).strftime('%Y-%m-%dT%H:%M:%S')
+    print('Looking for Sentinel-2 images from %s to %s' % (start_date, end_date), end=' ')
+
+    # Import and filter S2 SR HARMONIZED
+    s2_sr_collection = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+        .filterBounds(area_of_interest)
+        .filterDate(start_date, end_date))
+
+    # Import and filter s2cloudless.
+    s2_cloudless_collection = (ee.ImageCollection('COPERNICUS/S2_CLOUD_PROBABILITY')
+        .filterBounds(area_of_interest)
+        .filterDate(start_date, end_date))
+
+    # Join the filtered s2cloudless collection to the SR collection by the 'system:index' property.
+    cloud_collection = ee.ImageCollection(ee.Join.saveFirst('s2cloudless').apply(**{
+        'primary': s2_sr_collection,
+        'secondary': s2_cloudless_collection,
+        'condition': ee.Filter.equals(**{
+            'leftField': 'system:index',
+            'rightField': 'system:index'
+        })
+    }))
+
+    cloud_collection = cloud_collection.map(lambda img: img.addBands(ee.Image(img.get('s2cloudless')).select('probability')))
+
+    def set_is2_cloudiness(img, aoi=area_of_interest):
+        cloudprob = img.select(['probability']).reduceRegion(reducer=ee.Reducer.mean(), 
+                                                             geometry=aoi, 
+                                                             bestEffort=True, 
+                                                             maxPixels=1e6)
+        return img.set('ground_track_cloud_prob', cloudprob.get('probability'))
+
+    cloud_collection = cloud_collection.map(set_is2_cloudiness)
+
+    return cloud_collection
+
+
+################################################################################################################################################
+def download_S2(lon, lat, date_time, buffer_m=2500, max_cloud_prob=15, gamma_value=1.3, 
+                imagery_filename='imagery/my-satellite-image.tif', download_imagery=True):
+    
+    datetime_is2 = datetime.strptime(date_time, '%Y-%m-%dT%H:%M:%SZ')
+    
+    if download_imagery:
+        days_buffer = 2
+        collection_size = 0
+        if days_buffer > 200:
+            days_buffer = 200
+        increment_days = days_buffer
+        while (collection_size<5) & (days_buffer <= 200):
+
+            collection = get_sentinel2_cloud_collection_buffer(lon, lat, date_time, days_buffer=days_buffer)
+
+            # filter collection to only images that are (mostly) cloud-free along the ICESat-2 ground track
+            cloudfree_collection = collection.filter(ee.Filter.lt('ground_track_cloud_prob', max_cloud_prob))
+
+            collection_size = cloudfree_collection.size().getInfo()
+            if collection_size == 1: 
+                print('--> there is %i cloud-free image.' % collection_size)
+            elif collection_size > 1: 
+                print('--> there are %i cloud-free images.' % collection_size)
+            else:
+                print('--> there are not enough cloud-free images: widening date range...')
+            days_buffer += increment_days
+
+        # get the time difference between ICESat-2 and Sentinel-2 and sort by it 
+        is2time = date_time
+        def set_time_difference(img, is2time=is2time):
+            timediff = ee.Date(is2time).difference(img.get('system:time_start'), 'second').abs()
+            return img.set('timediff', timediff)
+        cloudfree_collection = cloudfree_collection.map(set_time_difference).sort('timediff')
+
+        # create a region around the ground track over which to download data
+        point_of_interest = ee.Geometry.Point(lon, lat)
+        region_of_interest = point_of_interest.buffer(buffer_m)
+
+        # select the first image, and turn the colleciton into an 8-bit RGB for download
+        selectedImage = cloudfree_collection.first()
+        mosaic = cloudfree_collection.sort('timediff', False).mosaic()
+        rgb = mosaic.select('B4', 'B3', 'B2')
+        rgb = rgb.unitScale(0, 15000).clamp(0.0, 1.0)
+        rgb_gamma = rgb.pow(1/gamma_value)
+        rgb8bit= rgb_gamma.multiply(255).uint8()
+
+        # from the selected image get some stats: product id, cloud probability and time difference from icesat-2
+        prod_id = selectedImage.get('PRODUCT_ID').getInfo()
+        cld_prb = selectedImage.get('ground_track_cloud_prob').getInfo()
+        s2datetime = datetime.fromtimestamp(selectedImage.get('system:time_start').getInfo()/1e3)
+        s2datestr = datetime.strftime(s2datetime, '%Y-%b-%d')
+        s2dtstr = datetime.strftime(s2datetime,'%Y-%m-%dT%H:%M:%SZ')
+        is2datetime = datetime.strptime(date_time, '%Y-%m-%dT%H:%M:%SZ')
+        timediff = s2datetime - is2datetime
+        days_diff = timediff.days
+        if days_diff == 0: diff_str = 'Same day as'
+        if days_diff == 1: diff_str = '1 day after'
+        if days_diff == -1: diff_str = '1 day before'
+        if days_diff > 1: diff_str = '%i days after' % np.abs(days_diff)
+        if days_diff < -1: diff_str = '%i days before' % np.abs(days_diff)
+
+        print('--> Closest cloud-free Sentinel-2 image:')
+        print('    - product_id: %s' % prod_id)
+        print('    - time difference: %s' % timediff)
+        print('    - mean cloud probability: %.1f' % cld_prb)
+
+        # get the download URL and download the selected image
+        success = False
+        scale = 10
+        tries = 0
+        while (success == False) & (tries <= 5):
+            try:
+                downloadURL = rgb8bit.getDownloadUrl({'name': 'mySatelliteImage',
+                                                          'crs': selectedImage.select('B3').projection().crs(),
+                                                          'scale': scale,
+                                                          'region': region_of_interest,
+                                                          'filePerBand': False,
+                                                          'format': 'GEO_TIFF'})
+
+                response = requests.get(downloadURL)
+                with open(imagery_filename, 'wb') as f:
+                    f.write(response.content)
+
+                print('--> Downloaded the 8-bit RGB image as %s.' % imagery_filename)
+                success = True
+                tries += 1
+            except:
+                # traceback.print_exc()
+                scale *= 2
+                print('-> download unsuccessful, increasing scale to %.1f...' % scale)
+                success = False
+                tries += 1
+
+    return imagery_filename, s2dtstr, '%s'%timediff, cld_prb, prod_id
+
+
+################################################################################################################################################
+def download_S2_full(lon, lat, date_time, buffer_m=2500, max_cloud_prob=15, gamma_value=1.3, 
+                     imagery_filename='imagery/my-satellite-image-full.tif', download_imagery=True, 
+                     select_bands=None, select_bands_rename=None):
+    
+    datetime_is2 = datetime.strptime(date_time, '%Y-%m-%dT%H:%M:%SZ')
+    
+    if download_imagery:
+        days_buffer = 2
+        collection_size = 0
+        if days_buffer > 200:
+            days_buffer = 200
+        increment_days = days_buffer
+        while (collection_size<5) & (days_buffer <= 200):
+
+            collection = get_sentinel2_cloud_collection_buffer(lon, lat, date_time, days_buffer=days_buffer)
+
+            # filter collection to only images that are (mostly) cloud-free along the ICESat-2 ground track
+            cloudfree_collection = collection.filter(ee.Filter.lt('ground_track_cloud_prob', max_cloud_prob))
+
+            collection_size = cloudfree_collection.size().getInfo()
+            if collection_size == 1: 
+                print('--> there is %i cloud-free image.' % collection_size)
+            elif collection_size > 1: 
+                print('--> there are %i cloud-free images.' % collection_size)
+            else:
+                print('--> there are not enough cloud-free images: widening date range...')
+            days_buffer += increment_days
+
+        # get the time difference between ICESat-2 and Sentinel-2 and sort by it 
+        is2time = date_time
+        def set_time_difference(img, is2time=is2time):
+            timediff = ee.Date(is2time).difference(img.get('system:time_start'), 'second').abs()
+            return img.set('timediff', timediff)
+        cloudfree_collection = cloudfree_collection.map(set_time_difference).sort('timediff')
+
+        # create a region around the ground track over which to download data
+        point_of_interest = ee.Geometry.Point(lon, lat)
+        region_of_interest = point_of_interest.buffer(buffer_m)
+
+        # select the first image, and turn the colleciton into an 8-bit RGB for download
+        selectedImage = cloudfree_collection.first()
+
+        this_crs = selectedImage.select('B2').projection().getInfo()['crs']
+        properties = selectedImage.propertyNames()
+        def reproject_to_first(img):
+            if select_bands:
+                img = img.select(select_bands)
+            if select_bands_rename:
+                img = img.rename(select_bands_rename)
+            return img.resample('bilinear').reproject(**{'crs': this_crs,'scale': 10})
+        sorted_collection = cloudfree_collection.sort('timediff', False).map(reproject_to_first)
+        mosaic = sorted_collection.mosaic().reproject(**{'crs': this_crs,'scale': 10})
+        def set_properties(image, properties):
+            property_dict = selectedImage.toDictionary(properties)
+            return image.set(property_dict)
+        mosaic = set_properties(mosaic, properties)
+
+        # from the selected image get some stats: product id, cloud probability and time difference from icesat-2
+        prod_id = selectedImage.get('PRODUCT_ID').getInfo()
+        cld_prb = selectedImage.get('ground_track_cloud_prob').getInfo()
+        gran_id = selectedImage.get('GRANULE_ID').getInfo()
+        s2datetime = datetime.fromtimestamp(selectedImage.get('system:time_start').getInfo()/1e3)
+        s2datestr = datetime.strftime(s2datetime, '%Y-%b-%d')
+        s2dtstr = datetime.strftime(s2datetime,'%Y-%m-%dT%H:%M:%SZ')
+        is2datetime = datetime.strptime(date_time, '%Y-%m-%dT%H:%M:%SZ')
+        timediff = s2datetime - is2datetime
+        days_diff = timediff.days
+        if days_diff == 0: diff_str = 'Same day as'
+        if days_diff == 1: diff_str = '1 day after'
+        if days_diff == -1: diff_str = '1 day before'
+        if days_diff > 1: diff_str = '%i days after' % np.abs(days_diff)
+        if days_diff < -1: diff_str = '%i days before' % np.abs(days_diff)
+
+        print('--> Closest cloud-free Sentinel-2 image:')
+        print('    - product_id: %s' % prod_id)
+        print('    - time difference: %s' % timediff)
+        print('    - mean cloud probability: %.1f' % cld_prb)
+
+        # get the download URL and download the selected image
+        success = False
+        scale = 10
+        tries = 0
+        while (success == False) & (tries <= 5):
+            try:
+                downloadURL = mosaic.getDownloadUrl({'name': 'mySatelliteImage',
+                                                          'crs': mosaic.select('B3').projection().crs(),
+                                                          'scale': scale,
+                                                          'region': region_of_interest,
+                                                          'filePerBand': False,
+                                                          'format': 'GEO_TIFF'})
+
+                response = requests.get(downloadURL)
+                with open(imagery_filename, 'wb') as f:
+                    f.write(response.content)
+
+                print('--> Downloaded the 8-bit RGB image as %s.' % imagery_filename)
+                success = True
+                tries += 1
+            except:
+                # traceback.print_exc()
+                scale *= 2
+                print('-> download unsuccessful, increasing scale to %.1f...' % scale)
+                traceback.print_exc()
+                success = False
+                tries += 1
+
+    # from rasterio.enums import Resampling
+    
+    # Path to the downloaded GeoTIFF file
+    original_file = imagery_filename
+    modified_file = imagery_filename.replace('.tif', '_info.tif')
+    
+    # Open the original GeoTIFF file
+    with rio.open(original_file, 'r') as src:
+        # Read the metadata
+        metadata = src.meta.copy()
+    
+        # Add a description to the metadata
+        metadata.update({
+            'product_id': prod_id,
+            'granule_id': gran_id
+        })
+    
+        # Read the data from the original file
+        data = src.read()
+
+    if select_bands_rename:
+        description_names = select_bands_rename
+    elif select_bands:
+        description_names = select_bands
+    else:
+        description_names = mosaic.bandNames().getInfo()
+    
+    # Save the modified GeoTIFF file with the updated metadata
+    with rio.open(modified_file, 'w', **metadata) as dst:
+        dst.write(data)
+
+        dst.update_tags(0, product_id=prod_id)
+        dst.update_tags(0, granule_id=gran_id)
+    
+        # Add description to each band
+        for i in range(1, src.count + 1):
+            dst.update_tags(i, band_name=description_names[i-1])
+    
+    print(f"Modified GeoTIFF saved as {modified_file}")
+
+    return modified_file, s2dtstr, '%s'%timediff, cld_prb, prod_id
+
+################################################################################################################################################
+def add_graticule2(gdf, ax_img, meridians_locs=['bottom','right'], parallels_locs=['top','left'], fontsz=8):
+    
+    def _rect_inter_inner(x1, x2):
+        n1 = x1.shape[0]-1
+        n2 = x2.shape[0]-1
+        X1 = np.c_[x1[:-1], x1[1:]]
+        X2 = np.c_[x2[:-1], x2[1:]]
+        S1 = np.tile(X1.min(axis=1), (n2, 1)).T
+        S2 = np.tile(X2.max(axis=1), (n1, 1))
+        S3 = np.tile(X1.max(axis=1), (n2, 1)).T
+        S4 = np.tile(X2.min(axis=1), (n1, 1))
+        return S1, S2, S3, S4
+    
+    
+    def _rectangle_intersection_(x1, y1, x2, y2):
+        S1, S2, S3, S4 = _rect_inter_inner(x1, x2)
+        S5, S6, S7, S8 = _rect_inter_inner(y1, y2)
+    
+        C1 = np.less_equal(S1, S2)
+        C2 = np.greater_equal(S3, S4)
+        C3 = np.less_equal(S5, S6)
+        C4 = np.greater_equal(S7, S8)
+    
+        ii, jj = np.nonzero(C1 & C2 & C3 & C4)
+        return ii, jj
+    
+    
+    def intersection(x1, y1, x2, y2):
+    
+        x1 = np.asarray(x1)
+        x2 = np.asarray(x2)
+        y1 = np.asarray(y1)
+        y2 = np.asarray(y2)
+    
+        ii, jj = _rectangle_intersection_(x1, y1, x2, y2)
+        n = len(ii)
+    
+        dxy1 = np.diff(np.c_[x1, y1], axis=0)
+        dxy2 = np.diff(np.c_[x2, y2], axis=0)
+    
+        T = np.zeros((4, n))
+        AA = np.zeros((4, 4, n))
+        AA[0:2, 2, :] = -1
+        AA[2:4, 3, :] = -1
+        AA[0::2, 0, :] = dxy1[ii, :].T
+        AA[1::2, 1, :] = dxy2[jj, :].T
+    
+        BB = np.zeros((4, n))
+        BB[0, :] = -x1[ii].ravel()
+        BB[1, :] = -x2[jj].ravel()
+        BB[2, :] = -y1[ii].ravel()
+        BB[3, :] = -y2[jj].ravel()
+    
+        for i in range(n):
+            try:
+                T[:, i] = np.linalg.solve(AA[:, :, i], BB[:, i])
+            except:
+                T[:, i] = np.Inf
+    
+        in_range = (T[0, :] >= 0) & (T[1, :] >= 0) & (
+            T[0, :] <= 1) & (T[1, :] <= 1)
+    
+        xy0 = T[2:, in_range]
+        xy0 = xy0.T
+        return xy0[:, 0], xy0[:, 1]
+    
+    xl = ax_img.get_xlim()
+    yl = ax_img.get_ylim()
+    minx = xl[0]
+    miny = yl[0]
+    maxx = xl[1]
+    maxy = yl[1]
+    bounds = [minx, miny, maxx, maxy]
+    latlon_bbox = warp.transform(gdf.crs, {'init': 'epsg:4326'}, 
+                                 [bounds[i] for i in [0,2,2,0,0]], 
+                                 [bounds[i] for i in [1,1,3,3,1]])
+    min_lat = np.min(latlon_bbox[1])
+    max_lat = np.max(latlon_bbox[1])
+    min_lon = np.min(latlon_bbox[0])
+    max_lon = np.max(latlon_bbox[0])
+    latdiff = max_lat-min_lat
+    londiff = max_lon-min_lon
+    diffs = np.array([0.0001, 0.0002, 0.00025, 0.0004, 0.0005,
+                      0.001, 0.002, 0.0025, 0.004, 0.005, 
+                      0.01, 0.02, 0.025, 0.04, 0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 1, 2])
+    latstep = np.min(diffs[diffs>latdiff/8])
+    lonstep = np.min(diffs[diffs>londiff/8])
+    minlat = np.floor(min_lat/latstep)*latstep
+    maxlat = np.ceil(max_lat/latstep)*latstep
+    minlon = np.floor(min_lon/lonstep)*lonstep
+    maxlon = np.ceil(max_lon/lonstep)*lonstep
+
+    # plot meridians and parallels
+    xl = ax_img.get_xlim()
+    yl = ax_img.get_ylim()
+    meridians = np.arange(minlon,maxlon, step=lonstep)
+    parallels = np.arange(minlat,maxlat, step=latstep)
+    latseq = np.linspace(minlat,maxlat,200)
+    lonseq = np.linspace(minlon,maxlon,200)
+    gridcol = 'k'
+    gridls = ':'
+    gridlw = 0.5
+    topline = [[xl[0],xl[1]],[yl[1],yl[1]]]
+    bottomline = [[xl[0],xl[1]],[yl[0],yl[0]]]
+    leftline = [[xl[0],xl[0]],[yl[0],yl[1]]]
+    rightline = [[xl[1],xl[1]],[yl[0],yl[1]]]
+    addleft = r'$\rightarrow$'
+    addright = r'$\leftarrow$'
+    for me in meridians:
+        gr_trans = warp.transform({'init': 'epsg:4326'},gdf.crs,me*np.ones_like(latseq),latseq)
+        deglab = '%.10g°E' % me if me >= 0 else '%.10g°W' % -me
+        rot = np.arctan2(gr_trans[1][-1] - gr_trans[1][0], gr_trans[0][-1] - gr_trans[0][0]) * 180 / np.pi
+        if 'bottom' in meridians_locs:
+            ha = 'right' if rot>0 else 'left'
+            deglab_ = deglab+addleft if rot>0 else addright+deglab
+            intx,inty = intersection(bottomline[0], bottomline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment=ha,
+                        rotation=rot, rotation_mode='anchor')
+        if 'top' in meridians_locs:
+            ha = 'left' if rot>0 else 'right'
+            deglab_ = addright+deglab if rot>0 else deglab+addleft
+            intx,inty = intersection(topline[0], topline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment=ha,
+                        rotation=rot, rotation_mode='anchor')
+        if 'right' in meridians_locs:
+            intx,inty = intersection(rightline[0], rightline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, addright+deglab, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment='left',
+                        rotation=rot, rotation_mode='anchor')
+        if 'left' in meridians_locs:
+            intx,inty = intersection(leftline[0], leftline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab+addleft, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment='right',
+                        rotation=rot, rotation_mode='anchor')
+        
+        thislw = gridlw
+        ax_img.plot(gr_trans[0],gr_trans[1],c=gridcol,ls=gridls,lw=thislw,alpha=0.5)
+    for pa in parallels:
+        gr_trans = warp.transform({'init': 'epsg:4326'},gdf.crs,lonseq,pa*np.ones_like(lonseq))
+        thislw = gridlw
+        deglab = '%.10g°N' % pa if pa >= 0 else '%.10g°S' % -pa
+        rot = np.arctan2(gr_trans[1][-1] - gr_trans[1][0], gr_trans[0][-1] - gr_trans[0][0]) * 180 / np.pi
+        if 'left' in parallels_locs:
+            intx,inty = intersection(leftline[0], leftline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab+addleft, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment='right',
+                           rotation=rot, rotation_mode='anchor')
+        if 'right' in parallels_locs:
+            intx,inty = intersection(rightline[0], rightline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, addright+deglab, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment='left',
+                           rotation=rot, rotation_mode='anchor')
+        if 'top' in parallels_locs:
+            ha = 'left' if rot>0 else 'right'
+            deglab_ = addright+deglab if rot>0 else deglab+addleft
+            intx,inty = intersection(topline[0], topline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment=ha,
+                           rotation=rot, rotation_mode='anchor')
+        if 'bottom' in parallels_locs:
+            ha = 'right' if rot>0 else 'left'
+            deglab_ = deglab+addleft if rot>0 else addright+deglab
+            intx,inty = intersection(bottomline[0], bottomline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color='gray',verticalalignment='center',horizontalalignment=ha,
+                           rotation=rot, rotation_mode='anchor')
+        
+        ax_img.plot(gr_trans[0],gr_trans[1],c=gridcol,ls=gridls,lw=thislw,alpha=0.5)
+        ax_img.set_xlim(xl)
+        ax_img.set_ylim(yl)
+
+
+################################################################################################################################################
+def get_features_image(df_data, out_id='example_image', verbose=False):
+    df_in = df_data[['IS2_id', 'lat', 'lon', 'col', 'row', 'conf']].copy()
+    for i, k in enumerate(list(df_data)[:-2]):
+    
+        # log transforms of bands
+        if k.startswith('B') or (k=='AOT') or (k=='WVP') or (k=='cloudScore'):
+            newname = k+'_log'
+            if verbose:
+                print('%s --> log: %s' % (k, newname))
+            log_trans = np.log1p(df_data[k])
+            df_in[newname] = log_trans
+    
+        # cosines of zenith angles
+        if (k=='SZA') or k.startswith('VZA'):
+            newname = k+'_cos'
+            if verbose:
+                print('%s --> cos: %s' % (k, newname))
+            df_in[newname] = np.cos(np.deg2rad(df_data[k]))
+            
+        # the features that stay the same
+        if k in ['SCL', 'MSK_CLDPRB', 'MSK_SNWPRB', 'ndwi']:
+            if verbose:
+                print('%s --> no change: %s' % (k, k))
+            df_in[k] = df_data[k]
+    
+        # cosines of relative azimuth angles, and phase angles
+        if k.startswith('VAA'):
+            bnd = k[4:]
+            newname = 'RAA_' + bnd + '_cos'
+            if verbose:
+                print('%s --> cos relative azimuth: %s' % (k, newname))
+            RAA = np.cos(np.deg2rad(df_data[k] - df_data.SAA))
+            df_in[newname] = RAA
+            newname = 'PhA_' + bnd
+            if verbose:
+                print('%s --> phase angle: %s' % (k, newname))
+            PhA = np.arccos(np.cos(np.deg2rad(df_data.SZA)) * np.cos(np.deg2rad(df_data['VZA_'+bnd])) + np.sin(np.deg2rad(df_data.SZA)) * np.sin(np.deg2rad(df_data['VZA_'+bnd])) * RAA)
+            df_in[newname] = PhA
+    
+    # visible bands ratios and differences
+    df_in['ratio_logB4_logB2'] = (df_in.B4_log+1.0) / (df_in.B2_log+1.0)
+    df_in['ratio_logB4_logB3'] = (df_in.B4_log+1.0) / (df_in.B3_log+1.0)
+    df_in['ratio_logB3_logB2'] = (df_in.B3_log+1.0) / (df_in.B2_log+1.0)
+    df_in['diff_logB2_logB4'] = df_in.B2_log - df_in.B4_log
+    df_in['diff_logB3_logB4'] = df_in.B3_log - df_in.B4_log
+    df_in['diff_logB2_logB3'] = df_in.B2_log - df_in.B3_log
+    
+    fn_features = 'sonar/sonar_imagery_depth_features_%s.parquet' % (out_id)
+    df_in.to_parquet(fn_features)
+    print('--> wrote file: %s' % fn_features)
+    return fn_features
+
+
+################################################################################################################################################
+def save_S2_bands_to_df(fn_img, out_id='example_image'):
+    
+    from rasterio.transform import Affine
+    from pyproj import Transformer
+    
+    img_dat = rio.open(fn_img)
+    
+    # get the pixel center lon/lat values
+    cols, rows = np.meshgrid(np.arange(img_dat.width), np.arange(img_dat.height))
+    xs, ys = rio.transform.xy(img_dat.transform, rows, cols)
+    xs = np.array(xs)
+    ys = np.array(ys)
+    transformer = Transformer.from_crs(img_dat.crs, "EPSG:4326", always_xy=True)
+    lons, lats = transformer.transform(xs, ys)
+    df_img = pd.DataFrame({'lon': lons.flatten(), 'lat': lats.flatten(), 'col': cols.flatten(), 'row': rows.flatten()})
+    
+    for ib in np.arange(1, img_dat.count+1):
+        df_img[img_dat.tags(ib)['band_name']] = img_dat.read(int(ib)).flatten()
+    
+    print('--> get metadata from S3', end=' ')
+    meta_fn_save = get_metadata_file(img_gt=None, l2a_product_id=img_dat.tags(0)['product_id'], l2a_granule_id=img_dat.tags(0)['granule_id'])
+    
+    print('--> interpolate angles', end=' ')
+    gdf_img = add_interpolated_angles(meta_fn_save, df_img)
+    
+    product_id = img_dat.tags(0)['product_id']
+    # fill nans if any
+    if gdf_img.isna().any(axis=1).any():
+        collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+        yr = product_id[11:15]
+        mn = product_id[15:17]
+        dy = int(product_id[17:19])
+        thisdate = ee.Date('%s-%s-%s' % (yr,mn,dy))
+        thisImage = collection.filterDate(thisdate.advance(-1, 'day'), thisdate.advance(1, 'day')).filter(ee.Filter.eq('PRODUCT_ID', product_id)).first()
+        gdf_img = fill_na_angles_with_means(gdf_img, thisImage)
+    
+    gdf_img['IS2_id'] = fn_img.split('/')[-1]
+    gdf_img['S2_id'] = product_id
+    gdf_img['ndwi'] = (gdf_img.B2 - gdf_img.B4) / (gdf_img.B2 + gdf_img.B4)
+    gdf_img.loc[gdf_img.ndwi.isna(), 'ndwi'] = 1.0
+    gdf_img['conf'] = gdf_img.isna().any(axis=1).astype(np.float32)
+    
+    colnames = ['lat', 'lon', 'col', 'row', 'conf',
+                'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B11', 'B12', 
+                'AOT', 'WVP', 'SCL', 'MSK_CLDPRB', 'MSK_SNWPRB', 'cloudScore', 'ndwi',
+                'SZA', 'SAA',
+                'VZA_B1', 'VZA_B2', 'VZA_B3', 'VZA_B4', 'VZA_B5', 'VZA_B6', 'VZA_B7', 'VZA_B8', 'VZA_B8A', 'VZA_B9', 'VZA_B11', 'VZA_B12',
+                'VAA_B1', 'VAA_B2', 'VAA_B3', 'VAA_B4', 'VAA_B5', 'VAA_B6', 'VAA_B7', 'VAA_B8', 'VAA_B8A', 'VAA_B9', 'VAA_B11', 'VAA_B12',
+                'S2_id', 'IS2_id']
+    gdf_img = gdf_img[colnames]
+    
+    fn_out_data = 'sonar/S2_predictors/%s_depth_reflectance_S2.csv' % out_id
+    import pyarrow as pa
+    fn_out_data_pq = fn_out_data.replace('.csv', '.parquet')
+    SCHEMA = pa.schema([
+        ('lat', pa.float32()),
+        ('lon', pa.float32()),
+        ('col', pa.int32()),
+        ('row', pa.int32()),
+        ('conf', pa.float32()),
+        ('B1', pa.float32()),
+        ('B2', pa.float32()),
+        ('B3', pa.float32()),
+        ('B4', pa.float32()),
+        ('B5', pa.float32()),
+        ('B6', pa.float32()),
+        ('B7', pa.float32()),
+        ('B8', pa.float32()),
+        ('B8A', pa.float32()),
+        ('B9', pa.float32()),
+        ('B11', pa.float32()),
+        ('B12', pa.float32()),
+        ('AOT', pa.float32()),
+        ('WVP', pa.float32()),
+        ('SCL', pa.uint8()),
+        ('MSK_CLDPRB', pa.float32()),
+        ('MSK_SNWPRB', pa.float32()),
+        ('cloudScore', pa.float32()),
+        ('ndwi', pa.float32()),
+        ('SZA', pa.float32()),
+        ('SAA', pa.float32()),
+        ('VZA_B1', pa.float32()),
+        ('VZA_B2', pa.float32()),
+        ('VZA_B3', pa.float32()),
+        ('VZA_B4', pa.float32()),
+        ('VZA_B5', pa.float32()),
+        ('VZA_B6', pa.float32()),
+        ('VZA_B7', pa.float32()),
+        ('VZA_B8', pa.float32()),
+        ('VZA_B8A', pa.float32()),
+        ('VZA_B9', pa.float32()),
+        ('VZA_B11', pa.float32()),
+        ('VZA_B12', pa.float32()),
+        ('VAA_B1', pa.float32()),
+        ('VAA_B2', pa.float32()),
+        ('VAA_B3', pa.float32()),
+        ('VAA_B4', pa.float32()),
+        ('VAA_B5', pa.float32()),
+        ('VAA_B6', pa.float32()),
+        ('VAA_B7', pa.float32()),
+        ('VAA_B8', pa.float32()),
+        ('VAA_B8A', pa.float32()),
+        ('VAA_B9', pa.float32()),
+        ('VAA_B11', pa.float32()),
+        ('VAA_B12', pa.float32()),
+        ('S2_id', pa.string()),
+        ('IS2_id', pa.string()),
+    ])
+    gdf_img.to_parquet(fn_out_data_pq, schema=SCHEMA)
+    print('\n--> saved file as %s' % fn_out_data_pq)
+    return fn_out_data_pq

@@ -11,3 +11,4 @@ training_data_gris/*
 __pycache__
 zzz_*
 !plots/*.jpg
+sonar/
