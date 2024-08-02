@@ -43,12 +43,15 @@ from shapely.geometry import MultiPolygon
 from IPython.display import Image, display
 from shapely.geometry.polygon import orient
 import matplotlib.collections as mcollections
+from matplotlib.collections import LineCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import griddata, NearestNDInterpolator
 
-sys.path.append('../')
+ee.Initialize()
+
+# sys.path.append('../')
 # from lakeanalysis.utils import dictobj, convert_time_to_string, read_melt_lake_h5
-from lakeanalysis.curve_intersect import intersection
+# from lakeanalysis.curve_intersect import intersection
 
 sys.path.append('/Users/parndt/Vault/')
 from aws_creds import return_key_secret
@@ -1431,6 +1434,7 @@ def get_timediff_sonar(selectedImage, gdf):
     tdiff = t_s2 - t_sonar
     tsec = tdiff.total_seconds()
     sign = 'before' if np.sign(tsec) < 0 else 'after'
+    signpm1 = np.sign(tsec)
     tsec = np.abs(tsec) 
     days, rem = divmod(tsec, 24 * 60 * 60)
     hrs, rem = divmod(rem, 60 * 60)
@@ -1438,7 +1442,8 @@ def get_timediff_sonar(selectedImage, gdf):
     days = '' if days == 0 else '%i days, ' % days
     hrs = '' if hrs == 0 else '%i hrs, ' % hrs
     mins = '%i mins' % mins
-    tdiff_str = '%s%s%s %s ICESat-2' % (days,hrs,mins,sign)
+    tdiff_str = '%s%s%s %s sonar' % (days,hrs,mins,sign)
+    tsec = tsec * signpm1
 
     return  int(np.round(tsec)), tdiff_str, datetime_print_s2
 
@@ -1885,71 +1890,220 @@ def download_S2_full(lon, lat, date_time, buffer_m=2500, max_cloud_prob=15, gamm
     return modified_file, s2dtstr, '%s'%timediff, cld_prb, prod_id
 
 ################################################################################################################################################
+def _rect_inter_inner(x1, x2):
+    n1 = x1.shape[0]-1
+    n2 = x2.shape[0]-1
+    X1 = np.c_[x1[:-1], x1[1:]]
+    X2 = np.c_[x2[:-1], x2[1:]]
+    S1 = np.tile(X1.min(axis=1), (n2, 1)).T
+    S2 = np.tile(X2.max(axis=1), (n1, 1))
+    S3 = np.tile(X1.max(axis=1), (n2, 1)).T
+    S4 = np.tile(X2.min(axis=1), (n1, 1))
+    return S1, S2, S3, S4
+
+################################################################################################################################################
+def _rectangle_intersection_(x1, y1, x2, y2):
+    S1, S2, S3, S4 = _rect_inter_inner(x1, x2)
+    S5, S6, S7, S8 = _rect_inter_inner(y1, y2)
+
+    C1 = np.less_equal(S1, S2)
+    C2 = np.greater_equal(S3, S4)
+    C3 = np.less_equal(S5, S6)
+    C4 = np.greater_equal(S7, S8)
+
+    ii, jj = np.nonzero(C1 & C2 & C3 & C4)
+    return ii, jj
+
+################################################################################################################################################
+def intersection(x1, y1, x2, y2):
+
+    x1 = np.asarray(x1)
+    x2 = np.asarray(x2)
+    y1 = np.asarray(y1)
+    y2 = np.asarray(y2)
+
+    ii, jj = _rectangle_intersection_(x1, y1, x2, y2)
+    n = len(ii)
+
+    dxy1 = np.diff(np.c_[x1, y1], axis=0)
+    dxy2 = np.diff(np.c_[x2, y2], axis=0)
+
+    T = np.zeros((4, n))
+    AA = np.zeros((4, 4, n))
+    AA[0:2, 2, :] = -1
+    AA[2:4, 3, :] = -1
+    AA[0::2, 0, :] = dxy1[ii, :].T
+    AA[1::2, 1, :] = dxy2[jj, :].T
+
+    BB = np.zeros((4, n))
+    BB[0, :] = -x1[ii].ravel()
+    BB[1, :] = -x2[jj].ravel()
+    BB[2, :] = -y1[ii].ravel()
+    BB[3, :] = -y2[jj].ravel()
+
+    for i in range(n):
+        try:
+            T[:, i] = np.linalg.solve(AA[:, :, i], BB[:, i])
+        except:
+            T[:, i] = np.Inf
+
+    in_range = (T[0, :] >= 0) & (T[1, :] >= 0) & (
+        T[0, :] <= 1) & (T[1, :] <= 1)
+
+    xy0 = T[2:, in_range]
+    xy0 = xy0.T
+    return xy0[:, 0], xy0[:, 1]
+
+################################################################################################################################################
+def add_graticule_crs(ax_img, crs='EPSG:4326', meridians_locs=['bottom','right'], parallels_locs=['top','left'], max_lines=6,
+                      fontsz=8, color='gray', addleft=r'$\rightarrow$', addright=r'$\leftarrow$', gridcol='k', gridls=':', gridlw=0.5,
+                      va='center', inside=False, b_rem_me=(0,0), t_rem_me=(0,0), l_rem_pa=(0,0), r_rem_pa=(0,0),
+                      tbbx = dict(facecolor='white', alpha=0.5, edgecolor='none', boxstyle="Round, pad=0.2")):
+    
+    xl = ax_img.get_xlim()
+    yl = ax_img.get_ylim()
+    minx = xl[0]
+    miny = yl[0]
+    maxx = xl[1]
+    maxy = yl[1]
+    bounds = [minx, miny, maxx, maxy]
+    latlon_bbox = warp.transform(crs, {'init': 'epsg:4326'}, 
+                                 [bounds[i] for i in [0,2,2,0,0]], 
+                                 [bounds[i] for i in [1,1,3,3,1]])
+    min_lat = np.min(latlon_bbox[1])
+    max_lat = np.max(latlon_bbox[1])
+    min_lon = np.min(latlon_bbox[0])
+    max_lon = np.max(latlon_bbox[0])
+    latdiff = max_lat-min_lat
+    londiff = max_lon-min_lon
+    diffs = np.array([0.0001, 0.0002, 0.00025, 0.0004, 0.0005,
+                      0.001, 0.002, 0.0025, 0.004, 0.005, 
+                      0.01, 0.02, 0.025, 0.04, 0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 1, 2])
+    diffs = np.array([0.0001, 0.0002, 0.0004, 0.0005,
+                      0.001, 0.002, 0.004, 0.005, 
+                      0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.4, 0.5, 1, 2])
+    latstep = np.min(diffs[diffs>latdiff/max_lines])
+    lonstep = np.min(diffs[diffs>londiff/max_lines])
+    minlat = np.floor(min_lat/latstep)*latstep
+    maxlat = np.ceil(max_lat/latstep)*latstep
+    minlon = np.floor(min_lon/lonstep)*lonstep
+    maxlon = np.ceil(max_lon/lonstep)*lonstep
+
+    # plot meridians and parallels
+    xl = ax_img.get_xlim()
+    yl = ax_img.get_ylim()
+    meridians = np.arange(minlon,maxlon, step=lonstep)
+    parallels = np.arange(minlat,maxlat, step=latstep)
+    latseq = np.linspace(minlat,maxlat,200)
+    lonseq = np.linspace(minlon,maxlon,200)
+    topline = [[xl[0],xl[1]],[yl[1],yl[1]]]
+    bottomline = [[xl[0],xl[1]],[yl[0],yl[0]]]
+    leftline = [[xl[0],xl[0]],[yl[0],yl[1]]]
+    rightline = [[xl[1],xl[1]],[yl[0],yl[1]]]
+
+    valign = va
+
+    for ime, me in enumerate(meridians):
+        gr_trans = warp.transform({'init': 'epsg:4326'},crs,me*np.ones_like(latseq),latseq)
+        deglab = '%.10g°E' % me if me >= 0 else '%.10g°W' % -me
+        rot = np.arctan2(gr_trans[1][-1] - gr_trans[1][0], gr_trans[0][-1] - gr_trans[0][0]) * 180 / np.pi
+        if ('bottom' in meridians_locs) and ((ime >= b_rem_me[0]) and (ime < (len(meridians)-b_rem_me[1]))):
+        # if ('bottom' in meridians_locs):
+            ha = 'right' if rot>0 else 'left'
+            if inside:
+                ha = 'right' if rot<0 else 'left'
+                deglab_ = deglab+addleft if rot<0 else addright+deglab
+            else: 
+                deglab_ = deglab+addleft if rot>0 else addright+deglab
+            intx,inty = intersection(bottomline[0], bottomline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                        rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        if 'top' in (meridians_locs) and ((ime >= t_rem_me[0]) and (ime < (len(meridians)-t_rem_me[1]))):
+            ha = 'left' if rot>0 else 'right'
+            if inside:
+                ha = 'left' if rot<0 else 'right'
+                deglab_ = addright+deglab if rot<0 else deglab+addleft
+            else:
+                deglab_ = addright+deglab if rot>0 else deglab+addleft
+            intx,inty = intersection(topline[0], topline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                        rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        if 'right' in meridians_locs:
+            ha = 'right' if inside else 'left'
+            intx,inty = intersection(rightline[0], rightline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                deglab_ = deglab+addleft if inside else addright+deglab
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                        rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        if 'left' in meridians_locs:
+            ha = 'left' if inside else 'right'
+            intx,inty = intersection(leftline[0], leftline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                deglab_ = addright+deglab if inside else deglab+addleft
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                        rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        
+        thislw = gridlw
+        ax_img.plot(gr_trans[0],gr_trans[1],c=gridcol,ls=gridls,lw=thislw,alpha=0.5)
+        
+    for ipa, pa in enumerate(parallels):
+        gr_trans = warp.transform({'init': 'epsg:4326'},crs,lonseq,pa*np.ones_like(lonseq))
+        thislw = gridlw
+        deglab = '%.10g°N' % pa if pa >= 0 else '%.10g°S' % -pa
+        rot = np.arctan2(gr_trans[1][-1] - gr_trans[1][0], gr_trans[0][-1] - gr_trans[0][0]) * 180 / np.pi
+        if ('left' in parallels_locs) and ((ipa >= l_rem_pa[0]) and (ipa < (len(parallels)-l_rem_pa[1]))):
+            ha = 'left' if inside else 'right'
+            intx,inty = intersection(leftline[0], leftline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                deglab_ = addright+deglab if inside else deglab+addleft
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                           rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        if ('right' in parallels_locs) and ((ipa >= r_rem_pa[0]) and (ipa < (len(parallels)-r_rem_pa[1]))):
+            ha = 'right' if inside else 'left'
+            intx,inty = intersection(rightline[0], rightline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                deglab_ = deglab+addleft if inside else addright+deglab
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                           rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        if 'top' in parallels_locs:
+            ha = 'left' if rot>0 else 'right'
+            if inside:
+                ha = 'left' if rot<0 else 'right'
+                deglab_ = addright+deglab if rot<0 else deglab+addleft
+            else:
+                deglab_ = addright+deglab if rot>0 else deglab+addleft
+            intx,inty = intersection(topline[0], topline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                           rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        if 'bottom' in parallels_locs:
+            ha = 'right' if rot>0 else 'left'
+            if inside:
+                ha = 'right' if rot<0 else 'left'
+                deglab_ = deglab+addleft if rot<0 else addright+deglab
+            else:
+                deglab_ = deglab+addleft if rot>0 else addright+deglab
+            intx,inty = intersection(bottomline[0], bottomline[1], gr_trans[0], gr_trans[1])
+            if len(intx) > 0:
+                intx, inty = intx[0], inty[0]
+                ax_img.text(intx, inty, deglab_, fontsize=fontsz, color=color,verticalalignment=valign,horizontalalignment=ha,
+                           rotation=rot, rotation_mode='anchor', bbox=tbbx)
+        
+        ax_img.plot(gr_trans[0],gr_trans[1],c=gridcol,ls=gridls,lw=thislw,alpha=0.5)
+        ax_img.set_xlim(xl)
+        ax_img.set_ylim(yl)
+
+################################################################################################################################################
 def add_graticule2(gdf, ax_img, meridians_locs=['bottom','right'], parallels_locs=['top','left'], fontsz=8):
-    
-    def _rect_inter_inner(x1, x2):
-        n1 = x1.shape[0]-1
-        n2 = x2.shape[0]-1
-        X1 = np.c_[x1[:-1], x1[1:]]
-        X2 = np.c_[x2[:-1], x2[1:]]
-        S1 = np.tile(X1.min(axis=1), (n2, 1)).T
-        S2 = np.tile(X2.max(axis=1), (n1, 1))
-        S3 = np.tile(X1.max(axis=1), (n2, 1)).T
-        S4 = np.tile(X2.min(axis=1), (n1, 1))
-        return S1, S2, S3, S4
-    
-    
-    def _rectangle_intersection_(x1, y1, x2, y2):
-        S1, S2, S3, S4 = _rect_inter_inner(x1, x2)
-        S5, S6, S7, S8 = _rect_inter_inner(y1, y2)
-    
-        C1 = np.less_equal(S1, S2)
-        C2 = np.greater_equal(S3, S4)
-        C3 = np.less_equal(S5, S6)
-        C4 = np.greater_equal(S7, S8)
-    
-        ii, jj = np.nonzero(C1 & C2 & C3 & C4)
-        return ii, jj
-    
-    
-    def intersection(x1, y1, x2, y2):
-    
-        x1 = np.asarray(x1)
-        x2 = np.asarray(x2)
-        y1 = np.asarray(y1)
-        y2 = np.asarray(y2)
-    
-        ii, jj = _rectangle_intersection_(x1, y1, x2, y2)
-        n = len(ii)
-    
-        dxy1 = np.diff(np.c_[x1, y1], axis=0)
-        dxy2 = np.diff(np.c_[x2, y2], axis=0)
-    
-        T = np.zeros((4, n))
-        AA = np.zeros((4, 4, n))
-        AA[0:2, 2, :] = -1
-        AA[2:4, 3, :] = -1
-        AA[0::2, 0, :] = dxy1[ii, :].T
-        AA[1::2, 1, :] = dxy2[jj, :].T
-    
-        BB = np.zeros((4, n))
-        BB[0, :] = -x1[ii].ravel()
-        BB[1, :] = -x2[jj].ravel()
-        BB[2, :] = -y1[ii].ravel()
-        BB[3, :] = -y2[jj].ravel()
-    
-        for i in range(n):
-            try:
-                T[:, i] = np.linalg.solve(AA[:, :, i], BB[:, i])
-            except:
-                T[:, i] = np.Inf
-    
-        in_range = (T[0, :] >= 0) & (T[1, :] >= 0) & (
-            T[0, :] <= 1) & (T[1, :] <= 1)
-    
-        xy0 = T[2:, in_range]
-        xy0 = xy0.T
-        return xy0[:, 0], xy0[:, 1]
     
     xl = ax_img.get_xlim()
     yl = ax_img.get_ylim()
@@ -2122,7 +2276,7 @@ def get_features_image(df_data, out_id='example_image', verbose=False):
 
 
 ################################################################################################################################################
-def save_S2_bands_to_df(fn_img, out_id='example_image'):
+def save_S2_bands_to_df(fn_img, out_id='example_image', nodata_value=-9999):
     
     from rasterio.transform import Affine
     from pyproj import Transformer
@@ -2140,6 +2294,9 @@ def save_S2_bands_to_df(fn_img, out_id='example_image'):
     
     for ib in np.arange(1, img_dat.count+1):
         df_img[img_dat.tags(ib)['band_name']] = img_dat.read(int(ib)).flatten()
+
+    if nodata_value:
+        df_img = df_img[~(df_img == nodata_value).any(axis=1)]
     
     print('--> get metadata from S3', end=' ')
     meta_fn_save = get_metadata_file(img_gt=None, l2a_product_id=img_dat.tags(0)['product_id'], l2a_granule_id=img_dat.tags(0)['granule_id'])
@@ -2196,7 +2353,7 @@ def save_S2_bands_to_df(fn_img, out_id='example_image'):
         ('B12', pa.float32()),
         ('AOT', pa.float32()),
         ('WVP', pa.float32()),
-        ('SCL', pa.uint8()),
+        ('SCL', pa.int32()),
         ('MSK_CLDPRB', pa.float32()),
         ('MSK_SNWPRB', pa.float32()),
         ('cloudScore', pa.float32()),
@@ -2233,3 +2390,54 @@ def save_S2_bands_to_df(fn_img, out_id='example_image'):
     gdf_img.to_parquet(fn_out_data_pq, schema=SCHEMA)
     print('\n--> saved file as %s' % fn_out_data_pq)
     return fn_out_data_pq
+
+    
+################################################################################################################################################
+def fill_nans_bilinear(data):
+    # Get the indices of the valid (non-NaN) and NaN values
+    valid_mask = ~np.isnan(data)
+    invalid_mask = np.isnan(data)
+    
+    # Create a coordinate grid for the 2D array
+    x, y = np.indices(data.shape)
+    
+    # Extract the valid points and their values
+    valid_points = np.array((x[valid_mask], y[valid_mask])).T
+    valid_values = data[valid_mask]
+    
+    # Extract the points that need to be interpolated (NaN positions)
+    invalid_points = np.array((x[invalid_mask], y[invalid_mask])).T
+    
+    # Perform bilinear interpolation
+    interpolated_values = griddata(valid_points, valid_values, invalid_points, method='linear')
+    
+    # Fill the NaN positions with the interpolated values
+    data[invalid_mask] = interpolated_values
+    
+    return data
+
+    
+################################################################################################################################################
+def plot_colorline(x, y, c, cmap, ax, lw=1, vmin=None, vmax=None, autoscale=False, zorder=10):
+    
+    data = pd.DataFrame({'x': x, 'y': y, 'c': c})
+    if not vmin:
+        vmin = data.c.min()
+    if not vmax:
+        vmax = data.c.max()
+    
+    # Prepare segments for LineCollection
+    points = np.array([data.x, data.y]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    
+    # Create a LineCollection
+    lc = LineCollection(segments, cmap=cmap, norm=plt.Normalize(vmin, vmax), zorder=zorder)
+    lc.set_array(data.c)
+    lc.set_linewidth(lw)
+    
+    # Plotting
+    ax.add_collection(lc)
+    if autoscale:
+        ax.autoscale()
+
+    return lc
