@@ -784,6 +784,19 @@ def read_melt_lake_h5(fn):
         for key in f['photon_data'].keys():
             photon_data_dict[key] = f['photon_data'][key][()]
         lakedict['photon_data'] = pd.DataFrame(photon_data_dict)
+
+        mf_data_dict = {}
+        for key in f['mframe_data'].keys():
+            mf_data_dict[key] = f['mframe_data'][key][()]
+        lakedict['mframe_data'] = pd.DataFrame(mf_data_dict)
+
+        # imagery info, if available
+        if 'imagery_info' in f.keys():
+            lakedict['imagery_info'] = {}
+            for key in f['imagery_info'].keys(): 
+                lakedict['imagery_info'][key] = f['imagery_info'][key][()]
+                if f['imagery_info'][key].dtype == object:
+                    lakedict['imagery_info'][key] = lakedict['imagery_info'][key].decode('utf-8')
         
         return lakedict
 
