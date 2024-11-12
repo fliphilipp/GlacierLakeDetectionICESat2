@@ -2462,7 +2462,7 @@ def fill_nans_bilinear(data):
 
     
 ################################################################################################################################################
-def plot_colorline(x, y, c, cmap, ax, lw=1, vmin=None, vmax=None, autoscale=False, zorder=10):
+def plot_colorline(x, y, c, cmap, ax, lw=1, vmin=None, vmax=None, autoscale=False, zorder=10, capstyle='round'):
     
     data = pd.DataFrame({'x': x, 'y': y, 'c': c})
     if not vmin:
@@ -2475,7 +2475,7 @@ def plot_colorline(x, y, c, cmap, ax, lw=1, vmin=None, vmax=None, autoscale=Fals
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
     
     # Create a LineCollection
-    lc = LineCollection(segments, cmap=cmap, norm=plt.Normalize(vmin, vmax), zorder=zorder)
+    lc = LineCollection(segments, cmap=cmap, norm=plt.Normalize(vmin, vmax), zorder=zorder, capstyle=capstyle)
     lc.set_array(data.c)
     lc.set_linewidth(lw)
     

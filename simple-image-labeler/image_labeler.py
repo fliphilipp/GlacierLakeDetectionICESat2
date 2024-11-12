@@ -1,3 +1,11 @@
+# ideally specify working directory first below as: base_dir = 'path/to/working/directory'
+# (but can also choose from sidebar later)
+# run after activating environment with $ conda activate stlit-env
+# using the command $ streamlit run image_labeler.py
+
+# specify the image directory (change this)
+base_dir = '/Users/parndt/jupyterprojects/GLD3_complete/AIS' 
+
 import streamlit as st
 import os
 import numpy as np
@@ -17,8 +25,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# specify the image directory (change this)
-base_dir = '../../GLD3_complete/GrIS' 
 image_dir = base_dir + '/detection_context'
 st.sidebar.header("Working Directory")
 image_directory = st.sidebar.text_input("Image Directory", image_dir)
