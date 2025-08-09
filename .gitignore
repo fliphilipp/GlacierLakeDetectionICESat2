@@ -31,3 +31,5 @@ mprofile_*.dat
 !misc/granule_list_data.jpg
 misc/test1
 sonar_data_plots.tar.gz
+GlacierLakeIS2ML/training_data_ais/
+GlacierLakeIS2ML/data_ais/

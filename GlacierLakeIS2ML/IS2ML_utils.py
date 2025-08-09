@@ -97,7 +97,6 @@ def get_cloudfree_S2_collection(area_of_interest, date_time, days_buffer, max_cl
     datetime_requested = datetime.strptime(date_time, '%Y-%m-%dT%H:%M:%SZ')
     start_date = (datetime_requested - timedelta(days=days_buffer)).strftime('%Y-%m-%dT%H:%M:%SZ')
     end_date = (datetime_requested + timedelta(days=days_buffer)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    # print('Looking for images from %s to %s' % (start_date, end_date), end=' ')
     
     def get_sentinel2_collection(area_of_interest, start_date, end_date):
         sentinel2_collection = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
@@ -310,7 +309,7 @@ def get_metadata_file(img_gt, l2a_product_id=None, l2a_granule_id=None):
             
             meta_fn_save = download_metadata_file_s3(l1c_product_id, l1c_granule_id)
         except:
-            traceback.print_exc()
+            # traceback.print_exc()
             meta_fn_save = None
 
     return meta_fn_save
@@ -547,6 +546,78 @@ def add_interpolated_angles(meta_fn_save, dfout):
                 angle_colname = f'V{angletype[0]}A_{bandname_df}'
                 gdf_img[angle_colname] = interpolate_angles(anglegrid)
 
+    return gdf_img
+
+
+################################################################################################################################################
+def add_average_angles_gee(thisImage, dfout):
+    """
+    Create a GeoDataFrame from dfout (which must have 'lon' and 'lat' columns),
+    project it into the Sentinel-2 image CRS, and then attach the per-scene
+    average solar and view angles (same value on every row).
+    
+    Inputs:
+      • thisImage:    an ee.Image from "COPERNICUS/S2_SR_HARMONIZED"
+      • dfout:        a pandas DataFrame with at least 'lon' and 'lat' columns,
+                      plus any band columns named like 'B2', 'B3', 'B8A', etc.
+    
+    Returns:
+      • gdf_img:      a GeoDataFrame in the image’s CRS, with columns:
+           – geometry (point in image CRS),
+           – x_S2, y_S2 (coordinates in image CRS),
+           – SZA, SAA (scene-wide solar angles),
+           – VZA_<BAND>, VAA_<BAND>  (scene-wide view angles for each band present in dfout)
+    """
+    # 1) Get the image CRS from one of its bands (e.g. "B2"):
+    proj_info = thisImage.select('B2').projection().getInfo()
+    img_crs = proj_info['crs']          # e.g. "EPSG:32633" or a proj4 string
+    
+    # 2) Convert dfout → GeoDataFrame in EPSG:4326, then reproject to img_crs:
+    gdf_img = gpd.GeoDataFrame(
+        dfout.copy(),
+        geometry = gpd.points_from_xy(dfout.lon, dfout.lat),
+        crs = "EPSG:4326"
+    ).to_crs(img_crs)
+    
+    # 3) Add x_S2 / y_S2 columns (point coordinates in the image CRS):
+    gdf_img['x_S2'] = gdf_img.geometry.x
+    gdf_img['y_S2'] = gdf_img.geometry.y
+    
+    # 4) Pull the scene-wide solar angles from the Image's properties:
+    #    (these are single scalars; every point gets the same value)
+    sza = thisImage.get('MEAN_SOLAR_ZENITH_ANGLE').getInfo()
+    saa = thisImage.get('MEAN_SOLAR_AZIMUTH_ANGLE').getInfo()
+    gdf_img['SZA'] = sza
+    gdf_img['SAA'] = saa
+    
+    # 5) Identify which band‐columns are in dfout (matching the same regex as add_interpolated_angles):
+    bandkeys = [col for col in dfout.columns
+                if re.match(r'^B(\d{1,2}|8A)$', col)]
+    
+    # 6) For each band in bandkeys, pull its two view-angle properties (zenith & azimuth)
+    #    from the image, then write out VZA_<BAND> and VAA_<BAND> as constants.
+    for band in bandkeys:
+        band_upper = band.upper()  # e.g. "B2", "B3", "B8A"
+        
+        # Property names in COPERNICUS/S2_SR_HARMONIZED are:
+        #   MEAN_INCIDENCE_VIEW_ZENITH_ANGLE_<BAND>
+        #   MEAN_INCIDENCE_VIEW_AZIMUTH_ANGLE_<BAND>
+        vza_prop = f"MEAN_INCIDENCE_ZENITH_ANGLE_{band_upper}"
+        vaa_prop = f"MEAN_INCIDENCE_AZIMUTH_ANGLE_{band_upper}"
+        
+        try:
+            vza_val = thisImage.get(vza_prop).getInfo()
+        except Exception:
+            vza_val = np.nan
+        
+        try:
+            vaa_val = thisImage.get(vaa_prop).getInfo()
+        except Exception:
+            vaa_val = np.nan
+        
+        gdf_img[f"VZA_{band}"] = vza_val
+        gdf_img[f"VAA_{band}"] = vaa_val
+    
     return gdf_img
 
 
@@ -806,10 +877,11 @@ def read_melt_lake_h5(fn):
             photon_data_dict[key] = f['photon_data'][key][()]
         lakedict['photon_data'] = pd.DataFrame(photon_data_dict)
 
-        mf_data_dict = {}
-        for key in f['mframe_data'].keys():
-            mf_data_dict[key] = f['mframe_data'][key][()]
-        lakedict['mframe_data'] = pd.DataFrame(mf_data_dict)
+        if 'mframe_data' in f.keys():
+            mf_data_dict = {}
+            for key in f['mframe_data'].keys():
+                mf_data_dict[key] = f['mframe_data'][key][()]
+            lakedict['mframe_data'] = pd.DataFrame(mf_data_dict)
 
         # imagery info, if available
         if 'imagery_info' in f.keys():
@@ -1178,10 +1250,15 @@ def get_data_and_plot(lake_id, FLUID_SuRRF_info, base_dir=None, ground_track_buf
                     # save the metadata file with the sun/view angle grids from AWS S3
                     print('--> get metadata from S3', end=' ')
                     meta_fn_save = get_metadata_file(thisImage)
-            
-                    # interpolate angle grids to ICESat-2 ground track
-                    print('--> interpolate angles', end=' ')
-                    gdf_img = add_interpolated_angles(meta_fn_save, df_ee)
+                    
+                    # interpolate angle grids to ICESat-2 ground track if metadata successfully downloaded
+                    if meta_fn_save is not None:
+                        print('--> interpolate angles', end=' ')
+                        gdf_img = add_interpolated_angles(meta_fn_save, df_ee)
+                    # else fall back on the GEE average values per scene
+                    else:
+                        print('--> metadata download failed: fall back to using GEE average scene angles ', end=' ')
+                        gdf_img = add_average_angles_gee(thisImage, df_ee)
             
                     # fill any missing values with the ee-provided mean angles
                     gdf_img = fill_na_angles_with_means(gdf_img, thisImage)
