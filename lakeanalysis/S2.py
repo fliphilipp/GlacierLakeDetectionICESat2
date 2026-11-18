@@ -24,9 +24,13 @@ from cmcrameri import cm as cmc
 
 from lakeanalysis.nsidc import download_is2, read_atl03, read_atl06
 from lakeanalysis.utils import dictobj, convert_time_to_string, read_melt_lake_h5
-from ed.edcreds import getedcreds
+from lakeanalysis.edcreds import getedcreds
 
-ee.Initialize()
+_EE_PROJECT = os.environ.get('EE_PROJECT', 'ee-psarndt93')
+try:
+    ee.Initialize(project=_EE_PROJECT)
+except Exception as _ee_err:  # noqa: BLE001
+    print('Earth Engine not initialised for project %s (%s).' % (_EE_PROJECT, _ee_err))
 
 
 #####################################################################

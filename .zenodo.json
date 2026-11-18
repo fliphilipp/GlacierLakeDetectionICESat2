@@ -1,0 +1,34 @@
+{
+  "upload_type": "software",
+  "title": "FLUID/SuRRF: supraglacial lake detection and depth retrieval from ICESat-2 ATL03, with Sentinel-2 fusion and random-forest depth modelling",
+  "creators": [
+    {
+      "name": "Arndt, Philipp S.",
+      "affiliation": "Scripps Institution of Oceanography, University of California San Diego; Global Fishing Watch",
+      "orcid": "0000-0002-4759-5166"
+    },
+    {
+      "name": "Fricker, Helen A.",
+      "affiliation": "Scripps Institution of Oceanography, University of California San Diego",
+      "orcid": "0000-0002-0921-1432"
+    }
+  ],
+  "description": "<p><strong>Related publication.</strong> Arndt PS and Fricker HA, &ldquo;Five Years of ICESat-2 Supraglacial Lake Depths Improve Greenland Meltwater Volume Estimates&rdquo;, submitted to <em>Annals of Glaciology</em>, 2026. This record will be updated with the full citation and DOI once the paper is available.</p><p>Source code for the FLUID/SuRRF framework, which detects supraglacial lakes in ICESat-2 ATL03 photon data and retrieves along-track water depths, together with the code that fuses those depths with Sentinel-2 Level-2A surface reflectance to build a machine-learning training set, and that trains and evaluates the random-forest depth models.</p><p>Contents: <code>icelakes/</code> (FLUID detection, NSIDC access, utilities), <code>lakeanalysis/</code> (SuRRF depth retrieval and plotting), <code>GlacierLakeIS2ML/</code> (Sentinel-2 fusion, feature engineering, random-forest development), <code>HTCondor_submit/</code> (OSG Open Science Pool campaign configuration), and <code>zenodo_build/scripts/</code> (the build and verification scripts that produced the accompanying data records).</p><p>This is the version used for the accompanying paper. It is research code written for one campaign, not a packaged library.</p>",
+  "access_right": "open",
+  "license": "MIT",
+  "language": "eng",
+  "keywords": [
+    "ICESat-2",
+    "supraglacial lakes",
+    "Greenland Ice Sheet",
+    "lake depth",
+    "bathymetry",
+    "ATL03",
+    "Sentinel-2",
+    "random forest",
+    "machine learning",
+    "glaciology",
+    "FLUID",
+    "SuRRF"
+  ]
+}

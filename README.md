@@ -14,6 +14,7 @@
 
 ### New approach for NSIDC data access:
 - Data requests are based on the drainage basin regions (stored in [`geojsons/`](geojsons/)), which are the IMBIE basins with floating ice added to its nearest grounded basin. Basin definition from source ([Antarctica](https://nsidc.org/data/nsidc-0709/versions/2)/[Greenland](https://datadryad.org/stash/dataset/doi:10.7280/D1WT11)) is detailed in [`basins/make_basins.ipynb`](basins/make_basins.ipynb).
+- The Greenland basins additionally use the GIMP land/ice classification mask to add floating ice tongues. That mask is third-party data and is **not redistributed here**: download `GimpIceMask_90m_2015_v1.2.tif` from NSIDC ([doi:10.5067/B8X58MQBFUPA](https://doi.org/10.5067/B8X58MQBFUPA)) into `basins/GRE_ice_mask/` before running [`basins/make_basins_v2.ipynb`](basins/make_basins_v2.ipynb). Cite Howat IM, Negrete A and Smith BE (2014), *The Greenland Ice Mapping Project (GIMP) land classification and surface elevation data sets*, The Cryosphere 8(4), 1509–1518 ([doi:10.5194/tc-8-1509-2014](https://doi.org/10.5194/tc-8-1509-2014)).
 - Using the notebook [`request_data_and_make_granule_list.ipynb`](request_data_and_make_granule_list.ipynb):
   - Make all the needed **asynchonous** requests from NSIDC. There is one request per melt season / drainage shapefile combination.
   - Monitor the progress of order processing at NSIDC.

@@ -33,3 +33,22 @@ misc/test1
 sonar_data_plots.tar.gz
 GlacierLakeIS2ML/training_data_ais/
 GlacierLakeIS2ML/data_ais/
+
+# macOS metadata
+.DS_Store
+
+# Third-party data, not redistributed here. GIMP ice mask (Howat and others, 2014):
+# download from NSIDC, https://doi.org/10.5067/B8X58MQBFUPA
+basins/GRE_ice_mask/
+
+# scratch and superseded material, kept locally but not archived
+wn-geoip.tar.gz
+testplots_B-C_ATL03_20190119.tar.gz
+old_detect_lakes.py
+old_run_py.sh
+scratch_script.txt
+scratch_testing.ipynb
+untitled.txt
+main_test.ipynb
+test_fringe_fix.ipynb
+async_download_testing-Copy1.ipynb

@@ -16,7 +16,7 @@ from shapely.geometry.polygon import orient
 from shapely.geometry import Polygon, mapping
 from xml.etree import ElementTree as ET
 
-from ed.edcreds import getedcreds
+from lakeanalysis.edcreds import getedcreds
 
 ################################################################################
 def download_is2(short_name='ATL03', start_date='2018-01-01', end_date='2030-01-01', uid=None, pwd=None, rgt='all',

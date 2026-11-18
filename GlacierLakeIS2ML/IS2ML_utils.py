@@ -1,7 +1,15 @@
 import os
-os.environ["GDAL_DATA"] = "/Users/parndt/anaconda3/envs/eeicelakes-env/share/gdal"
-os.environ["PROJ_LIB"] = "/Users/parndt/anaconda3/envs/eeicelakes-env/share/proj"
-os.environ["PROJ_DATA"] = "/Users/parndt/anaconda3/envs/eeicelakes-env/share/proj"
+# These used to be set unconditionally to paths inside an older machine's conda env. Pointing
+# PROJ_DATA at a directory that does not exist breaks every CRS lookup the moment PROJ first
+# initialises ("PROJ: proj_create_from_database: Cannot find proj.db"), and because this module
+# is imported before any geospatial call, that poisons the whole session. Only apply them where
+# they actually resolve; otherwise leave the environment alone and let pyproj/rasterio use the
+# data shipped with the active environment.
+_LEGACY_SHARE = "/Users/parndt/anaconda3/envs/eeicelakes-env/share"
+if os.path.isdir(os.path.join(_LEGACY_SHARE, "proj")):
+    os.environ["GDAL_DATA"] = os.path.join(_LEGACY_SHARE, "gdal")
+    os.environ["PROJ_LIB"] = os.path.join(_LEGACY_SHARE, "proj")
+    os.environ["PROJ_DATA"] = os.path.join(_LEGACY_SHARE, "proj")
 import re
 import ee
 import sys
@@ -47,14 +55,35 @@ from matplotlib.collections import LineCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import griddata, NearestNDInterpolator
 
-ee.Initialize()
+# Earth Engine requires an explicit Cloud project since earthengine-api 1.x.
+# Set EE_PROJECT to override. Wrapped so that the non-Earth-Engine functions in this
+# module stay importable on machines without Earth Engine credentials.
+_EE_PROJECT = os.environ.get('EE_PROJECT', 'ee-psarndt93')
+try:
+    ee.Initialize(project=_EE_PROJECT)
+except Exception as _ee_err:  # noqa: BLE001 - any failure here must not block import
+    print('Earth Engine not initialised for project %s (%s).\n'
+          '  Run: earthengine authenticate --auth_mode=localhost' % (_EE_PROJECT, _ee_err))
 
 # sys.path.append('../')
 # from lakeanalysis.utils import dictobj, convert_time_to_string, read_melt_lake_h5
 # from lakeanalysis.curve_intersect import intersection
 
-sys.path.append('/Users/parndt/Vault/')
-from aws_creds import return_key_secret
+def return_key_secret():
+    """Copernicus Dataspace S3 credentials, as an (access_key, secret) pair.
+
+    Only needed to fetch Sentinel-2 L1C angle metadata for scenes that are not already
+    cached in S2_MTD/. Generate keys at dataspace.copernicus.eu and export them as
+    COPERNICUS_S3_ACCESS_KEY and COPERNICUS_S3_SECRET_KEY.
+    """
+    key_id = os.environ.get('COPERNICUS_S3_ACCESS_KEY')
+    secret = os.environ.get('COPERNICUS_S3_SECRET_KEY')
+    if not (key_id and secret):
+        raise RuntimeError(
+            'Copernicus Dataspace S3 credentials are not set. Generate keys at '
+            'dataspace.copernicus.eu, then export COPERNICUS_S3_ACCESS_KEY and '
+            'COPERNICUS_S3_SECRET_KEY.')
+    return key_id, secret
 
 
 ################################################################################################################################################
@@ -250,9 +279,37 @@ def get_image_along_track(lk, img_gt, ground_track_buffer=7.5):
 
 
 ################################################################################################################################################
+def find_cached_metadata(product_id, cache_dir='S2_MTD'):
+    """Locate a cached MTD_TL.xml for the same acquisition, ignoring processing baseline.
+
+    Sentinel-2 products get reprocessed, which changes the baseline (N0301 -> N0500) and the
+    processing timestamp in the product identifier, so an exact-name cache lookup misses. The
+    viewing and solar angle grids in MTD_TL.xml are acquisition geometry, however, and are the
+    same for any baseline of a given datatake and tile - so a match on
+    (sensor, datatake, orbit, tile) is sufficient and avoids a redundant S3 download.
+    """
+    m = re.match(r'(S2[AB])_MSIL\d[CA]_(\d{8}T\d{6})_N\d+_(R\d+)_(T\w+)_', str(product_id))
+    if not m or not os.path.isdir(cache_dir):
+        return None
+    sensor, datatake, orbit, tile = m.groups()
+    pat = re.compile(r'%s_MSIL\d[CA]_%s_N\d+_%s_%s_\d{8}T\d{6}_MTD_TL\.xml'
+                     % (sensor, datatake, orbit, tile))
+    for fn in sorted(os.listdir(cache_dir)):
+        if pat.fullmatch(fn):
+            return os.path.join(cache_dir, fn)
+    return None
+
+
 def get_metadata_file(img_gt, l2a_product_id=None, l2a_granule_id=None):
     
-    # Initialize S3 resource
+    # A cached angle file for this acquisition makes the S3 round-trip unnecessary, so look
+    # before asking for credentials - otherwise an offline cache hit still fails on missing keys.
+    _cached = find_cached_metadata(l2a_product_id) if l2a_product_id else None
+    if _cached:
+        print('using cached metadata %s' % _cached)
+        return _cached
+
+    # Initialize S3 resource (only reached on a cache miss)
     k, s = return_key_secret()
     s3 = s3resource(k, s)
 
